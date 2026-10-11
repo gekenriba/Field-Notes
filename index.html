@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#14332a" />
-  <meta name="description" content="Field Notes — offline field journal for botanical observations in Tawang District, Arunachal Pradesh." />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0F2B26" />
+  <meta name="description" content="Field Notes — a field journal for botanists in the Eastern Himalaya: photos, GPS and altitude, live identification hints, growth stages, phenology and distribution maps. Developed by Geken." />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Field Notes</title>
   <link rel="manifest" href="manifest.webmanifest" />
@@ -15,65 +15,83 @@
   <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar" id="topbar">
     <a href="#/home" class="brand" aria-label="Field Notes home">
-      <span class="brand-mark" aria-hidden="true">✿</span>
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8FE0B6"/><stop offset="1" stop-color="#8AA8F0"/></linearGradient></defs><path d="M16 3C25 7 27 19 16 29 5 19 7 7 16 3Z" fill="url(#bm)"/><path d="M16 7v22M16 14l-4-3M16 19l5-4M16 24l-5-4" stroke="#0F2B26" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
       <span>Field Notes</span>
     </a>
     <div class="topbar-right">
       <span id="netStatus" class="net-pill" title="Network status">…</span>
-      <a href="#/more" class="icon-btn" aria-label="Backup and settings">⋯</a>
+      <a href="#/more" class="icon-btn" aria-label="Settings, backup and about">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>
+      </a>
     </div>
   </header>
 
   <div id="restoreBanner" class="banner hidden">
-    <span>You have an unsaved entry from earlier.</span>
-    <button id="restoreYes" class="btn btn-small btn-primary" type="button">Restore</button>
+    <span>An entry you were writing wasn’t saved.</span>
+    <button id="restoreYes" class="btn btn-small btn-primary" type="button">Restore it</button>
     <button id="restoreNo" class="btn btn-small btn-ghost" type="button">Discard</button>
   </div>
 
   <main id="view" tabindex="-1"></main>
 
   <nav class="tabbar" aria-label="Main">
-    <a href="#/home" data-tab="home"><span aria-hidden="true">⌂</span>Home</a>
-    <a href="#/records" data-tab="records"><span aria-hidden="true">☰</span>Records<b id="draftBadge" class="badge hidden"></b></a>
+    <a href="#/home" data-tab="home" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>Home</a>
+    <a href="#/records" data-tab="records" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h12M6 10h12M6 15h8M6 20h5"/></svg>Records<b id="draftBadge" class="badge hidden"></b></a>
     <button id="cameraFab" class="fab" type="button" aria-label="New observation with camera">
-      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
     </button>
-    <a href="#/map" data-tab="map"><span aria-hidden="true">◎</span>Map</a>
-    <a href="#/species" data-tab="species"><span aria-hidden="true">❦</span>Species</a>
+    <a href="#/map" data-tab="map" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18c3-1 4-5 7-6s4 2 6 1 3-4 5-5M3 13c2-1 3-3 5-3.5M13 19c2 0 4-1 6-3"/></svg>Map</a>
+    <a href="#/flora" data-tab="flora" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21v-7M12 14c-4 0-6-3-6-7 3 0 6 2 6 7Zm0 0c4 0 6-3 6-7-3 0-6 2-6 7Z"/></svg>Flora</a>
   </nav>
 
-  <!-- Live camera -->
+  <!-- Live camera with morphology callouts and identification suggestions -->
   <section id="cameraSheet" class="camera hidden" aria-label="Camera">
     <video id="cameraVideo" playsinline muted autoplay></video>
+    <div id="camOverlay" class="cam-overlay" aria-hidden="true"></div>
     <div class="camera-top">
-      <button id="camClose" class="cam-btn" type="button" aria-label="Close camera">✕</button>
-      <span id="camGps" class="cam-gps">Locating…</span>
-      <button id="camTorch" class="cam-btn hidden" type="button" aria-label="Toggle flashlight">ϟ</button>
+      <button id="camClose" class="cam-btn" type="button" aria-label="Close camera">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="cam-status">
+        <span id="camGps" class="cam-pill">Locating…</span>
+        <button id="camLive" class="cam-pill cam-live on" type="button" aria-pressed="true">Live ID</button>
+      </div>
+      <button id="camTorch" class="cam-btn hidden" type="button" aria-label="Toggle flashlight">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>
+      </button>
     </div>
+    <div id="camHint" class="cam-hint" aria-live="polite"></div>
+    <div id="camSuggest" class="cam-suggest" aria-live="polite"></div>
     <div id="camStrip" class="cam-strip"></div>
     <div class="camera-bottom">
-      <button id="camGallery" class="cam-btn" type="button" aria-label="Choose from gallery">▦</button>
-      <button id="camShutter" class="shutter" type="button" aria-label="Take photo"></button>
-      <button id="camFlip" class="cam-btn" type="button" aria-label="Switch camera">⟲</button>
+      <button id="camGallery" class="cam-btn" type="button" aria-label="Choose from gallery">
+        <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m4 17 5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+      <button id="camShutter" class="shutter" type="button" aria-label="Take photo"><span></span></button>
+      <button id="camFlip" class="cam-btn" type="button" aria-label="Switch camera">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
     </div>
     <div class="camera-actions">
-      <button id="camQuickDraft" class="btn btn-ghost-light" type="button" disabled>Quick save as draft</button>
-      <button id="camDone" class="btn btn-primary" type="button" disabled>Next: details →</button>
+      <button id="camQuickDraft" class="btn btn-glass" type="button" disabled>Save as draft</button>
+      <button id="camDone" class="btn btn-primary" type="button" disabled>Add details</button>
     </div>
     <p id="camError" class="cam-error hidden"></p>
   </section>
 
   <input id="nativeCamInput" type="file" accept="image/*" capture="environment" class="visually-hidden" tabindex="-1" />
   <input id="galleryInput" type="file" accept="image/*" multiple class="visually-hidden" tabindex="-1" />
-  <input id="importInput" type="file" accept="application/json,.json" class="visually-hidden" tabindex="-1" />
+  <input id="importInput" type="file" accept=".zip,.json,application/zip,application/json" class="visually-hidden" tabindex="-1" />
 
   <!-- Entry form -->
   <section id="formSheet" class="sheet hidden" aria-labelledby="formTitle">
     <form id="entryForm" novalidate>
       <div class="sheet-head">
-        <button type="button" class="icon-btn" id="formClose" aria-label="Close">✕</button>
+        <button type="button" class="icon-btn" id="formClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
         <h2 id="formTitle">New observation</h2>
         <button type="submit" class="btn btn-small btn-primary" data-save="auto">Save</button>
       </div>
@@ -81,9 +99,11 @@
       <div class="sheet-body">
         <div id="formPhotos" class="photo-strip"></div>
         <div class="row-actions">
-          <button type="button" class="btn btn-outline" id="formCamera">📷 Camera</button>
-          <button type="button" class="btn btn-outline" id="formGallery">🖼 Gallery</button>
+          <button type="button" class="btn btn-outline btn-small" id="formCamera">Take photo</button>
+          <button type="button" class="btn btn-outline btn-small" id="formGallery">Add from gallery</button>
         </div>
+
+        <section class="card suggest-card hidden" id="suggestCard" aria-live="polite"></section>
 
         <fieldset class="card">
           <legend>Identification</legend>
@@ -92,7 +112,7 @@
           <label class="field">
             <span>Scientific name</span>
             <div class="taxon-input">
-              <input id="fScientific" name="scientificName" autocomplete="off" spellcheck="false" placeholder="Start typing — e.g. Rhododendron, Meconopsis…" />
+              <input id="fScientific" name="scientificName" autocomplete="off" spellcheck="false" placeholder="Start typing a genus or species" />
               <button type="button" id="lookupBtn" class="btn btn-small btn-outline">Look up</button>
             </div>
             <ul id="suggestList" class="suggest hidden" role="listbox"></ul>
@@ -103,7 +123,7 @@
             <label class="field"><span>Family</span><input id="fFamily" name="family" /></label>
             <label class="field"><span>Genus</span><input id="fGenus" name="genus" /></label>
             <label class="field"><span>Common name</span><input id="fCommon" name="commonName" /></label>
-            <label class="field"><span>Local name</span><input id="fLocal" name="localName" placeholder="Monpa / local" /></label>
+            <label class="field"><span>Local name</span><input id="fLocal" name="localName" placeholder="Monpa or other local name" /></label>
           </div>
           <div class="grid-2">
             <label class="field"><span>ID confidence</span>
@@ -113,18 +133,43 @@
                 <option value="tentative">Tentative (cf.)</option>
               </select>
             </label>
-            <label class="field"><span>Field label</span><input id="fLabel" name="fieldLabel" placeholder="e.g. Pedicularis sp. 3 (yellow)" /></label>
+            <label class="field"><span>Field label</span><input id="fLabel" name="fieldLabel" placeholder="Pedicularis sp. 3 (yellow)" /></label>
           </div>
           <label class="check">
             <input type="checkbox" id="fDraft" />
-            <span><strong>Keep as draft</strong> — not identified yet, I’ll update it later</span>
+            <span><strong>Keep as draft</strong> — not identified yet; I’ll come back to it</span>
           </label>
         </fieldset>
 
         <fieldset class="card">
-          <legend>Where &amp; when</legend>
+          <legend>Growth stage and population</legend>
+          <div class="stage-list" id="stageList" role="radiogroup" aria-label="Growth stage"></div>
+          <div class="chips hidden" id="flowerDetail" role="radiogroup" aria-label="Flowering stage"></div>
+          <div class="pop-row">
+            <label class="field pop-field"><span>Population (no. of plants)</span>
+              <div class="stepper">
+                <button type="button" class="step" data-step="-1" aria-label="One fewer">−</button>
+                <input id="fPopulation" name="population" type="number" min="0" step="1" inputmode="numeric" placeholder="—" />
+                <button type="button" class="step" data-step="1" aria-label="One more">+</button>
+              </div>
+            </label>
+            <div class="seg seg-small" id="popMethod" role="radiogroup" aria-label="Count method">
+              <button type="button" data-m="counted" class="on">Counted</button><button type="button" data-m="estimated">Estimated</button>
+            </div>
+          </div>
+          <label class="field"><span>Abundance</span>
+            <select id="fAbundance" name="abundance">
+              <option value="">Not recorded</option>
+              <option>Single individual</option><option>Rare</option><option>Occasional</option>
+              <option>Frequent</option><option>Abundant</option><option>Dominant</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Where and when</legend>
           <div class="gps-row">
-            <button type="button" id="gpsBtn" class="btn btn-outline">◎ Get GPS</button>
+            <button type="button" id="gpsBtn" class="btn btn-outline btn-small">Get GPS fix</button>
             <span id="gpsStatus" class="muted small"></span>
           </div>
           <div class="grid-2">
@@ -136,23 +181,14 @@
             <label class="field"><span>Time</span><input id="fTime" name="time" type="time" /></label>
           </div>
           <p id="altSource" class="muted small"></p>
-          <label class="field"><span>Locality</span><input id="fLocality" name="locality" placeholder="e.g. Bumla pass, near army post" /></label>
-          <label class="field"><span>Habitat</span><input id="fHabitat" name="habitat" placeholder="e.g. alpine meadow, rocky slope, Abies forest edge" /></label>
+          <label class="field"><span>Locality</span><input id="fLocality" name="locality" placeholder="Bumla pass, near the army post" /></label>
+          <label class="field"><span>Habitat</span><input id="fHabitat" name="habitat" placeholder="Alpine meadow, rocky slope, Abies forest edge" /></label>
         </fieldset>
 
         <fieldset class="card">
-          <legend>Observation</legend>
-          <span class="field-label">Phenology</span>
-          <div class="chips" id="phenoChips"></div>
-          <label class="field"><span>Abundance</span>
-            <select id="fAbundance" name="abundance">
-              <option value="">not recorded</option>
-              <option>Single individual</option><option>Rare</option><option>Occasional</option>
-              <option>Frequent</option><option>Abundant</option><option>Dominant</option>
-            </select>
-          </label>
-          <label class="field"><span>Notes</span>
-            <textarea id="fNotes" name="notes" rows="4" placeholder="Height, flower colour, associated species, soil, slope, aspect…"></textarea>
+          <legend>Notes</legend>
+          <label class="field"><span>Field notes</span>
+            <textarea id="fNotes" name="notes" rows="4" placeholder="Height, flower colour, associated species, soil, slope, aspect"></textarea>
           </label>
           <label class="field"><span>Tags</span><input id="fTags" name="tags" placeholder="medicinal, alpine, new record" /></label>
         </fieldset>
@@ -162,7 +198,7 @@
           <div class="grid-2">
             <label class="field"><span>Collector</span><input id="fCollector" name="collector" /></label>
             <label class="field"><span>Collection no.</span><input id="fCollNo" name="collectionNumber" /></label>
-            <label class="field"><span>Herbarium</span><input id="fHerbarium" name="herbarium" placeholder="e.g. ARUN, ASSAM" /></label>
+            <label class="field"><span>Herbarium</span><input id="fHerbarium" name="herbarium" placeholder="ARUN, ASSAM" /></label>
           </div>
         </details>
 
@@ -170,9 +206,9 @@
           <summary>Ethnobotany</summary>
           <div class="grid-2">
             <label class="field"><span>Use</span><input id="eUse" /></label>
-            <label class="field"><span>Part used</span><input id="ePart" placeholder="root, leaf, rhizome…" /></label>
+            <label class="field"><span>Part used</span><input id="ePart" placeholder="Root, leaf, rhizome" /></label>
             <label class="field"><span>Preparation</span><input id="ePrep" /></label>
-            <label class="field"><span>Community</span><input id="eCommunity" placeholder="Monpa, Brokpa…" /></label>
+            <label class="field"><span>Community</span><input id="eCommunity" placeholder="Monpa, Brokpa" /></label>
             <label class="field"><span>Informant</span><input id="eInformant" /></label>
             <label class="field"><span>Informant age</span><input id="eAge" type="number" min="0" /></label>
             <label class="field"><span>Informant gender</span>

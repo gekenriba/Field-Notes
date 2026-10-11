@@ -1,19 +1,22 @@
 # Field Notes
 
+A field journal for botanists in the Eastern Himalaya. Developed by **Geken**.
+
 Offline-first field journal for botanical observations in Tawang District, Arunachal Pradesh.
 Photos, GPS, altitude and notes are stored **on the device** (IndexedDB) — no account or server needed.
 
 ## What it does
 
-- **Camera capture that keeps working** — an in-app live camera (rear lens, torch, multi-shot) so the page is never sent to the background and the photo can't get lost. Falls back to the phone's camera app if camera permission is blocked.
-- **Quick save as draft** — photograph an unknown plant, tap once, move to the next. GPS and time are attached automatically.
-- **Drafts for unidentified plants** — anything saved without a scientific name (or with “Keep as draft” ticked) goes to *Records › Drafts* and shows a badge until you identify it.
-- **Name search before entry** — type a few letters for suggestions (GBIF Backbone + iNaturalist common names). Picking a name fills family, genus and common name, flags synonyms with the accepted name, and shows a short Wikipedia description and GBIF occurrence counts (worldwide / India). Every value is labelled with its source; results are cached for offline use.
-- **Per-species heatmaps (like iNaturalist)** — each species has its own page with a distribution heatmap, altitude range, first/last seen, a month-by-month seasonality chart (with share flowering), photos and records. The Map tab can show all records, drafts only, or any single species.
-- **Location** — best-of-several GPS fix with accuracy; altitude from GPS, or a 90 m elevation model when GPS gives none (labelled as such); nearest place name from OpenStreetMap; GPS/date read from gallery photos’ EXIF.
-- **Unsaved work is never lost** — the form autosaves; if the browser closes mid-entry you get a *Restore* banner.
-- **Export** — full JSON backup (with photos), CSV with Darwin Core column names, and GeoJSON for QGIS. Import merges backups.
-- **Works offline** — as an Android app or installed to the home screen; map areas you have viewed are cached for use without signal.
+- **Live identification camera.** While you point the camera, on-device analysis marks flowers (with their colour) and foliage using small, unobtrusive callouts. When you hold steady, it asks [Pl@ntNet](https://my.plantnet.org) for likely species and shows the top three with family and confidence. Tap one to carry it into the entry. The callouts work offline; name suggestions need internet and a free Pl@ntNet API key (Settings).
+- **Quick capture and drafts.** Save a plant as a draft in one tap and move on. GPS, time and any live suggestions are kept, and drafts wait under *Records › Drafts* until you identify them.
+- **Suggestions on entries.** With photos attached, the entry shows likely species, plus the most likely genus and family when the species is uncertain, and whether GBIF has records of each suggestion in India. Picking a suggestion marks the ID as *probable*.
+- **Growth stage and population.** Each record has a growth stage (BBCH-based: emerging, vegetative, buds, flowering with early/peak/late, fruiting, ripe/seeding, senescent, dormant) and the number of plants, counted or estimated.
+- **Phenology.** *Flora › Phenology* draws a month-by-stage chart for every species from your records, filterable by family, with a table view. Each species and family page has its own.
+- **Family icons.** Minimal icons generated from each family’s key traits (symmetry, petal number and shape, inflorescence type, typical colour) for ~60 families common in the Himalaya.
+- **Maps.** A minimal map with contour lines and soft relief computed from open elevation data (tap anywhere for the elevation), satellite imagery with state and district boundaries, and a topographic style. Heatmaps are drawn only from identified plant observations; drafts and other organisms show as points. Map areas you view are cached for offline use.
+- **Name lookups.** GBIF, iNaturalist and Wikipedia fill family, genus, accepted name and a short description, each labelled with its source.
+- **Backup and moving phones.** One-tap backup to a .zip (records and full-size photos) via the share sheet, so you can save it to Google Drive. Restore merges it into any phone with Field Notes.
+- **Export.** CSV with Darwin Core columns (including individualCount and growth stage) and GeoJSON for QGIS.
 
 Missing values are shown as *not reported* rather than guessed.
 
@@ -51,10 +54,19 @@ On the phone, open the site in Chrome and choose *Add to Home screen*, then tap 
 | `js/taxon.js` | GBIF / iNaturalist / Wikipedia lookups |
 | `js/maps.js` | Leaflet layers, heatmaps, markers |
 | `js/native.js` | Android bridges (share sheet) |
+| `js/morph.js` | On-device flower and foliage detection for the live camera |
+| `js/ident.js` | Pl@ntNet suggestions, daily quota guard, GBIF India check |
+| `js/phenology.js` | Growth stages and phenology charts |
+| `js/familyIcons.js` | Trait-based family icon generator |
+| `js/contours.js` | Contour lines and relief from AWS Terrain Tiles |
+| `js/backup.js` | Zip backup and restore |
+| `js/ui.js` | Haptics and motion |
+| `assets/hero/` | Home screen photos (Wikimedia Commons, credits in the app) |
+| `assets/geo/` | India state and district boundaries (DataMeet) |
 | `sw.js` | Offline cache (browser only) |
 | `android/` | Capacitor Android project |
 | `.github/workflows/android.yml` | Builds the APK and runs the emulator test |
 | `scripts/` | Web copy for the Android build; emulator test |
 | `vendor/` | Leaflet 1.9.4, Leaflet.heat 0.2.0, Fraunces font (OFL) |
 
-Data sources: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Open-Meteo (Copernicus DEM), OpenStreetMap/Nominatim, OpenTopoMap, Esri World Imagery.
+Data sources: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Pl@ntNet, AWS Terrain Tiles, Open-Meteo (Copernicus DEM), OpenStreetMap/Nominatim, Esri, OpenTopoMap, Esri World Imagery, DataMeet boundaries (CC BY 4.0; districts as of Census 2011). Home screen photos: Wikimedia Commons contributors under CC BY / CC BY-SA, listed in Settings › Sources and credits.

@@ -6,3 +6,4 @@ android/.gradle/
 android/local.properties
 android/capacitor-cordova-android-plugins/build/
 *.apk
+__pycache__/

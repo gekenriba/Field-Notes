@@ -167,13 +167,33 @@ def main():
         check('App loads and shows Home', lambda: page.wait_for_selector('.hero') and page.text_content('.hero h1'))
         check('Running as native app', lambda: page.evaluate('window.Capacitor.isNativePlatform()') or (_ for _ in ()).throw(Exception('not native')))
 
+        def hero():
+            page.wait_for_function('document.querySelector(".hero-slide.on img") && document.querySelector(".hero-slide.on img").naturalWidth > 0', timeout=15000)
+            time.sleep(1.5); shot('01b-home')
+            return page.text_content('#heroCredit')
+        check('Home photos and credits load', hero)
+
+        def set_key():
+            page.evaluate('location.hash = "#/more"'); page.wait_for_selector('#idKey')
+            page.evaluate('(() => { const i = document.querySelector("#idKey"); i.value = "fieldnotes-ci-invalid-key"; i.dispatchEvent(new Event("change")); })()')
+            time.sleep(1); shot('01c-about')
+            dev = page.text_content('.dev b')
+            page.evaluate('location.hash = "#/home"'); page.wait_for_selector('.hero')
+            return dev
+        check('About shows developer; test key set', set_key)
+
         def camera():
             page.click('#cameraFab')
             page.wait_for_function('document.querySelector("#cameraVideo").videoWidth > 0')
-            time.sleep(2); shot('02-camera')
+            time.sleep(7); shot('02-camera')
             page.click('#camShutter'); page.wait_for_selector('#camStrip img')
             return page.evaluate('[document.querySelector("#cameraVideo").videoWidth, document.querySelector("#cameraVideo").videoHeight]')
         check('In-app camera opens and takes a photo', camera)
+
+        def live():
+            info = page.evaluate('({callouts: [...document.querySelectorAll(".callout .lbl")].map(e => e.textContent), hint: document.querySelector("#camHint").textContent, chips: document.querySelector("#camSuggest").textContent.trim()})')
+            return f'callouts={info["callouts"]} hint="{info["hint"]}" suggestions="{info["chips"][:80]}" (emulator camera shows a synthetic scene)'
+        check('Live morphology scan runs on device', live)
 
         def to_form():
             page.click('#camDone'); page.wait_for_selector('#formSheet:not(.hidden)')
@@ -181,6 +201,13 @@ def main():
             if n != 1: raise Exception(f'{n} photos in form')
             return f'{n} photo in form'
         check('Photo carried into entry form', to_form)
+
+        def plantnet():
+            page.wait_for_function('document.querySelector("#suggestCard") && !document.querySelector("#suggestCard").classList.contains("hidden") && !/Comparing/.test(document.querySelector("#suggestCard").textContent)', timeout=40000)
+            t = page.text_content('#suggestCard')
+            if 'Could not reach' in t: raise Exception(t[:200])
+            return 'Pl@ntNet answered: ' + ' '.join(t.split())[:160]
+        check('Entry suggestions request reaches Pl@ntNet', plantnet)
 
         def gps():
             page.wait_for_function('document.querySelector("#fLat").value !== ""', timeout=45000)
@@ -196,6 +223,13 @@ def main():
             if not fam: raise Exception('family empty: ' + page.text_content('#lookupPanel')[:200])
             return f'family={fam}'
         check('Web lookup fills family (live GBIF)', lookup)
+
+        def stage():
+            page.click('[data-st=flowering]'); page.click('[data-fd=peak]')
+            page.click('.step[data-step="1"]'); page.click('.step[data-step="1"]')
+            page.evaluate('document.querySelector("#stageList").scrollIntoView()'); time.sleep(1); shot('03b-form-stage')
+            return f'stage on={page.evaluate("document.querySelector(\'.stage-opt.on b\').textContent")}, population={page.input_value("#fPopulation")}'
+        check('Growth stage and population in form', stage)
 
         def save():
             page.click('.form-foot [data-save=auto]')
@@ -250,11 +284,37 @@ def main():
             return f'{tiles} map tiles loaded'
         check('Map with heatmap renders', maps)
 
+        def contours():
+            page.evaluate('window.fieldNotes.state.map.setView([27.62, 91.95], 12, {animate: false}); 0'); time.sleep(10)
+            r = page.evaluate('''(() => { const cs = [...document.querySelectorAll("#bigMap canvas.leaflet-tile")]; let drawn = 0;
+              for (const c of cs) { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 400) if (d[i] > 0) { drawn++; break; } }
+              return [cs.length, drawn]; })()''')
+            shot('06b-contours')
+            if not r[1]: raise Exception(f'{r[0]} contour tiles, none drawn')
+            return f'{r[1]} of {r[0]} contour tiles drawn from AWS terrain data'
+        check('Contour lines from live elevation tiles', contours)
+
+        def satellite():
+            page.click('#mapStyle [data-s=Satellite]'); time.sleep(1)
+            page.evaluate('window.fieldNotes.state.map.setView([27.75, 92.2], 8, {animate: false}); 0'); time.sleep(8)
+            labels = page.evaluate('[...document.querySelectorAll(".district-label")].map(e => e.textContent)')
+            shot('06c-satellite-boundaries')
+            page.click('#mapStyle [data-s=Minimal]')
+            if 'Tawang' not in labels: raise Exception(f'district labels: {labels}')
+            return f'{len(labels)} district labels incl. Tawang, West Kameng'
+        check('Satellite with state and district boundaries', satellite)
+
         def species():
             page.evaluate('location.hash = "#/taxon/Rhododendron%20arboreum"')
             page.wait_for_selector('#txMap canvas.leaflet-heatmap-layer'); time.sleep(4); shot('07-species')
             return page.text_content('.detail-head h1')
         check('Species page with own heatmap', species)
+
+        def flora():
+            page.evaluate('location.hash = "#/flora?tab=phenology"'); page.wait_for_selector('.phenogram'); time.sleep(1); shot('07b-phenology')
+            page.evaluate('location.hash = "#/flora?tab=families"'); page.wait_for_selector('.fam-tile .ficon'); time.sleep(1); shot('07c-families')
+            return f'{page.evaluate("document.querySelectorAll(\'.fam-tile\').length")} family tiles with generated icons'
+        check('Phenology chart and family icons', flora)
 
         def export():
             page.evaluate('location.hash = "#/more"'); page.wait_for_selector('#expCsv')
@@ -265,6 +325,16 @@ def main():
                 raise Exception('share sheet not detected')
             return 'Android share sheet opened'
         check('Export opens Android share sheet', export)
+
+        def backup():
+            page.evaluate('document.querySelector("#bkNow").scrollIntoView()')
+            page.click('#bkNow'); time.sleep(6); shot('09-backup-share')
+            top = adb('shell', 'dumpsys', 'activity', 'activities')
+            adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); time.sleep(2)
+            if 'ChooserActivity' not in top and 'chooser' not in top.lower():
+                raise Exception('share sheet not detected: ' + page.text_content('#toast'))
+            return 'Backup zip built and handed to the share sheet (Drive, Files)'
+        check('Backup to Drive via share sheet', backup)
 
         def back():
             page.evaluate('location.hash = "#/home"'); time.sleep(1)
