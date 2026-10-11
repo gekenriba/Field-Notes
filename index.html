@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0F2B26" />
-  <meta name="description" content="Field Notes — a field journal for botanists in the Eastern Himalaya: photos, GPS and altitude, live identification hints, growth stages, phenology and distribution maps. Developed by Geken." />
+  <meta name="description" content="Field Notes: a field journal for documenting the flora of Arunachal Pradesh. Photos, location and altitude, dates from photo metadata, identification suggestions, growth stages, phenology and distribution maps. Developed by Geken." />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Field Notes</title>
@@ -103,6 +103,44 @@
           <button type="button" class="btn btn-outline btn-small" id="formGallery">Add from gallery</button>
         </div>
 
+        <fieldset class="card">
+          <legend>When</legend>
+          <div class="grid-2">
+            <label class="field"><span>Date</span><input id="fDate" name="date" type="date" /></label>
+            <label class="field"><span>Time</span><input id="fTime" name="time" type="time" /></label>
+          </div>
+          <p id="dateSource" class="source-line small"></p>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Where</legend>
+          <label class="field"><span>Google Maps link or coordinates</span>
+            <div class="taxon-input">
+              <input id="fMapsLink" name="mapsLink" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Paste a shared Maps link, or 27.58, 91.86" style="font-family:var(--sans);font-style:normal" />
+              <button type="button" id="mapsPaste" class="btn btn-small btn-outline">Paste</button>
+            </div>
+          </label>
+          <div class="row-actions" style="margin-top:-.2rem">
+            <button type="button" id="mapsApply" class="btn btn-small btn-primary">Use this location</button>
+            <button type="button" id="gpsBtn" class="btn btn-small btn-outline">Use phone GPS</button>
+            <a id="mapsOpen" class="btn btn-small btn-ghost hidden" target="_blank" rel="noopener">Check on Google Maps</a>
+          </div>
+          <p id="gpsStatus" class="source-line small"></p>
+          <div class="grid-2">
+            <label class="field"><span>Latitude</span><input id="fLat" name="lat" type="number" step="any" inputmode="decimal" /></label>
+            <label class="field"><span>Longitude</span><input id="fLng" name="lng" type="number" step="any" inputmode="decimal" /></label>
+            <label class="field"><span>Altitude (m)</span><input id="fAlt" name="altitude" type="number" step="1" inputmode="numeric" /></label>
+            <label class="field"><span>Accuracy (± m)</span><input id="fAcc" name="accuracy" type="number" step="1" inputmode="numeric" /></label>
+          </div>
+          <p id="altSource" class="muted small"></p>
+          <div class="grid-2">
+            <label class="field"><span>District</span><input id="fDistrict" name="district" list="districtList" placeholder="Auto from location" /></label>
+            <label class="field"><span>Locality</span><input id="fLocality" name="locality" placeholder="Sela pass, below the lake" /></label>
+          </div>
+          <datalist id="districtList"></datalist>
+          <label class="field"><span>Habitat</span><input id="fHabitat" name="habitat" placeholder="Alpine meadow, rocky slope, Abies forest edge" /></label>
+        </fieldset>
+
         <section class="card suggest-card hidden" id="suggestCard" aria-live="polite"></section>
 
         <fieldset class="card">
@@ -164,25 +202,6 @@
               <option>Frequent</option><option>Abundant</option><option>Dominant</option>
             </select>
           </label>
-        </fieldset>
-
-        <fieldset class="card">
-          <legend>Where and when</legend>
-          <div class="gps-row">
-            <button type="button" id="gpsBtn" class="btn btn-outline btn-small">Get GPS fix</button>
-            <span id="gpsStatus" class="muted small"></span>
-          </div>
-          <div class="grid-2">
-            <label class="field"><span>Latitude</span><input id="fLat" name="lat" type="number" step="any" inputmode="decimal" /></label>
-            <label class="field"><span>Longitude</span><input id="fLng" name="lng" type="number" step="any" inputmode="decimal" /></label>
-            <label class="field"><span>Altitude (m)</span><input id="fAlt" name="altitude" type="number" step="1" inputmode="numeric" /></label>
-            <label class="field"><span>GPS accuracy (± m)</span><input id="fAcc" name="accuracy" type="number" step="1" inputmode="numeric" /></label>
-            <label class="field"><span>Date</span><input id="fDate" name="date" type="date" /></label>
-            <label class="field"><span>Time</span><input id="fTime" name="time" type="time" /></label>
-          </div>
-          <p id="altSource" class="muted small"></p>
-          <label class="field"><span>Locality</span><input id="fLocality" name="locality" placeholder="Bumla pass, near the army post" /></label>
-          <label class="field"><span>Habitat</span><input id="fHabitat" name="habitat" placeholder="Alpine meadow, rocky slope, Abies forest edge" /></label>
         </fieldset>
 
         <fieldset class="card">

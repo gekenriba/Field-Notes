@@ -8,11 +8,12 @@ import { isNative, shareTextFile } from './native.js';
 import { haptic, setHaptics, enterView, countUp, installPressFeedback, reducedMotion } from './ui.js';
 import { STAGES, FLOWERING_DETAIL, GROUPS as STAGE_GROUPS, stageLabel, stageGroup, migrateStage, phenoMatrix, phenogramHTML, phenoTableHTML, wirePhenogram } from './phenology.js';
 import { familyIcon, familyTraits } from './familyIcons.js';
-import { loadIdentSettings, saveIdentSettings, identReady, identSettings, identify, indiaRecords, frameToBlob, liveBudgetLeft, usageToday } from './ident.js';
+import { loadIdentSettings, saveIdentSettings, identSettings, identify, identifyAll, engines, testKey, frameToBlob, liveBudgetLeft, usageToday } from './ident.js';
+import { locationFromInput, district2011, inArunachalBox } from './location.js';
 import { MorphScanner, coverTransform } from './morph.js';
 import { buildBackup, restoreBackup } from './backup.js';
 
-export const APP_VERSION = '3.0';
+export const APP_VERSION = '4.0';
 const DEVELOPER = 'Geken';
 
 /* ================= helpers ================= */
@@ -92,8 +93,8 @@ async function thumbsFor(entries) {
   for (const e of entries) { const u = await thumbURL(e.photoIds?.[0]); if (u) m.set(e.id, u); }
   return m;
 }
-async function credits() {
-  if (!state.credits) state.credits = fetch('assets/hero/credits.json').then((r) => r.json()).catch(() => []);
+async function heroPhotos() {
+  if (!state.credits) state.credits = fetch('assets/hero/photos.json').then((r) => r.json()).then((j) => j.photos || []).catch(() => []);
   return state.credits;
 }
 
@@ -168,7 +169,7 @@ function stagePill(e) {
 
 function entryCard(e, thumb) {
   const sci = !!e.scientificName;
-  const meta = [fmtDate(e.date), e.altitude != null ? `${e.altitude} m` : null, e.locality].filter(Boolean).join(', ');
+  const meta = [fmtDate(e.date), e.altitude != null ? `${e.altitude} m` : null, e.district || e.locality].filter(Boolean).join(', ');
   const g = e.stage ? stageGroup(e.stage) : null;
   const sub = [e.family, e.commonName || e.localName].filter(Boolean).join(', ')
     || (!sci && e.suggestions?.length ? `Suggested: ${e.suggestions[0].name}` : (!sci ? 'Not identified yet' : ''));
@@ -193,7 +194,7 @@ async function renderHome(view, _a, _p, token) {
   const alts = E.map((e) => e.altitude).filter((a) => a != null);
   const recent = E.slice(0, 5);
   const tmap = await thumbsFor([...drafts.slice(0, 8), ...recent]);
-  const cr = await credits();
+  const cr = await heroPhotos();
   if (token !== routeToken) return;
   const month = new Date().getMonth();
   const floweringNow = [...new Set(E.filter((e) => e.status === 'identified' && e.stage === 'flowering' && e.date && +e.date.slice(5, 7) - 1 === month).map((e) => e.scientificName))];
@@ -202,14 +203,13 @@ async function renderHome(view, _a, _p, token) {
   const changedSince = last ? E.some((e) => (e.updatedAt || '') > last.at) : E.length > 0;
 
   view.innerHTML = `
-    <section class="hero" aria-label="Himalayan medicinal plants">
-      ${cr.map((c, i) => `<div class="hero-slide ${i === 0 ? 'on' : ''}"><img src="${c.file}" alt="${esc(c.species)}" ${i ? 'loading="lazy"' : ''}></div>`).join('')}
-      <a class="hero-credit" id="heroCredit" href="#/more?s=credits"></a>
+    <section class="hero" aria-label="Plants of Arunachal Pradesh">
+      ${cr.map((c, i) => `<div class="hero-slide ${i === 0 ? 'on' : ''}"><img src="${c.file}" alt="" style="object-position:${Math.round(c.x * 100)}% 50%" ${i > 1 ? 'loading="lazy"' : ''}></div>`).join('')}
       <div class="hero-body">
-        <h1>${E.length ? 'Your Himalayan field journal' : 'Document the flora of the high Himalaya'}</h1>
+        <h1>${E.length ? 'Flora of Arunachal Pradesh' : 'Document the flora of Arunachal Pradesh'}</h1>
         <p class="hero-sub">${E.length
           ? `${E.length} observation${E.length === 1 ? '' : 's'} stored on this phone${alts.length ? `, from ${Math.min(...alts).toLocaleString()} to ${Math.max(...alts).toLocaleString()} m` : ''}.`
-          : 'Photograph a plant: position, altitude and time are recorded automatically, even without signal.'}</p>
+          : 'Photograph a plant in the field, or add your camera photos later with their date and a Google Maps pin. Works without signal.'}</p>
         <div class="hero-stats">
           <a href="#/records"><b data-count="${E.length}">0</b><span>Records</span></a>
           <a href="#/flora"><b data-count="${species.size}">0</b><span>Species</span></a>
@@ -222,6 +222,7 @@ async function renderHome(view, _a, _p, token) {
         </div>
       </div>
     </section>
+    <div class="hero-blend" aria-hidden="true"></div>
     ${E.length && daysSince > 7 && changedSince ? `<div class="reminder"><p>${last ? `Last backup ${Math.floor(daysSince)} days ago.` : 'Your records have never been backed up.'} Save a copy to Google Drive in case this phone is lost.</p><a class="btn btn-small btn-primary" href="#/more?s=backup">Back up</a></div>` : ''}
     ${drafts.length ? `<section class="block">
       <div class="block-head"><h2>Waiting for identification</h2><a href="#/records?filter=draft">All drafts</a></div>
@@ -242,18 +243,16 @@ async function renderHome(view, _a, _p, token) {
   $$('[data-count]', view).forEach((b) => countUp(b, +b.dataset.count));
   // Slow crossfade through the photos; one at a time, paused for reduced motion.
   const slides = $$('.hero-slide', view);
-  const creditEl = $('#heroCredit');
-  let i = 0;
-  const showCredit = () => { const c = cr[i]; if (c) creditEl.innerHTML = `<em>${esc(c.species)}</em>${esc(c.common)}. Photo ${esc(c.artist)}, ${esc(c.license)}`; };
-  showCredit();
+  let i = Math.floor(Math.random() * Math.min(4, slides.length));   // vary the opening photo a little
+  slides.forEach((s, k) => s.classList.toggle('on', k === i));
   if (slides.length > 1 && !reducedMotion()) {
     state.heroTimer = setInterval(() => {
       if (document.hidden) return;
       slides[i].classList.remove('on');
       i = (i + 1) % slides.length;
+      const img = slides[i].querySelector('img'); img.loading = 'eager';
       slides[i].classList.add('on');
-      creditEl.style.opacity = 0;
-      setTimeout(() => { showCredit(); creditEl.style.opacity = 1; }, 600);
+      const next = slides[(i + 1) % slides.length]?.querySelector('img'); if (next) next.loading = 'eager';
     }, 7000);
   }
 }
@@ -261,10 +260,13 @@ async function renderHome(view, _a, _p, token) {
 /* ================= RECORDS ================= */
 async function renderRecords(view, _arg, params) {
   const filter = params.filter || 'all';
+  const dists = [...new Set(state.entries.map((e) => e.district).filter(Boolean))].sort();
+  let district = params.district || '';
   view.innerHTML = `
     <div class="page-head"><h1>Records</h1><button class="btn btn-small btn-primary" id="recNew" type="button">New observation</button></div>
     <div class="toolbar">
       <input id="recSearch" type="search" placeholder="Search name, family, place, notes, tags" value="${esc(params.q || '')}" aria-label="Search records" />
+      ${dists.length > 1 ? `<select id="recDistrict" aria-label="District"><option value="">All districts</option>${dists.map((d) => `<option ${d === params.district ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>` : ''}
       <div class="seg" id="recFilter" role="tablist">
         ${['all', 'draft', 'identified'].map((f) => `<button type="button" class="${f === filter ? 'on' : ''}" data-f="${f}">${{ all: 'All', draft: 'Drafts', identified: 'Identified' }[f]}</button>`).join('')}
       </div>
@@ -276,13 +278,15 @@ async function renderRecords(view, _arg, params) {
     const q = $('#recSearch').value.trim().toLowerCase();
     let list = state.entries;
     if (current !== 'all') list = list.filter((e) => e.status === current);
-    if (q) list = list.filter((e) => [e.scientificName, e.fieldLabel, e.family, e.genus, e.commonName, e.localName, e.locality, e.habitat, e.notes, (e.tags || []).join(' ')]
+    if (district) list = list.filter((e) => (e.district || '') === district);
+    if (q) list = list.filter((e) => [e.scientificName, e.fieldLabel, e.family, e.genus, e.commonName, e.localName, e.district, e.locality, e.habitat, e.notes, (e.tags || []).join(' ')]
       .filter(Boolean).join(' ').toLowerCase().includes(q));
     const tmap = await thumbsFor(list.slice(0, 300));
     $('#recList').innerHTML = list.length ? list.slice(0, 300).map((e) => entryCard(e, tmap.get(e.id))).join('')
       : `<div class="empty"><p>${current === 'draft' && !q ? 'No drafts. Everything is identified.' : 'No matching records.'}</p></div>`;
   };
   $('#recSearch').addEventListener('input', debounce(draw, 200));
+  $('#recDistrict')?.addEventListener('change', (ev) => { district = ev.target.value; haptic.select(); draw(); });
   $('#recFilter').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-f]'); if (!b) return;
     current = b.dataset.f; haptic.select();
@@ -322,7 +326,7 @@ async function renderEntry(view, id) {
         ${e.status === 'draft' ? `<button class="btn btn-small btn-primary" id="entIdentify" type="button">Identify now</button>` : ''}
       </div>
     </section>
-    ${e.status === 'draft' && e.suggestions?.length ? `<section class="card suggest-card"><h3>Suggestions <span class="src">Pl@ntNet</span></h3>${suggestionListHTML({ species: e.suggestions }, { readOnly: true })}<p class="muted small">Suggestions only. Open “Identify now” to confirm one.</p></section>` : ''}
+    ${e.status === 'draft' && e.suggestions?.length ? `<section class="card suggest-card"><h3><span>Suggestions</span></h3>${suggestionListHTML({ species: e.suggestions, genera: e.idGenera, families: e.idFamilies, features: e.idFeatures, checkNext: e.idCheckNext }, { readOnly: true })}<p class="muted small">Suggestions only. Open “Identify now” to confirm one.</p></section>` : ''}
     <dl class="facts">
       <dt>Family</dt><dd>${show(e.family)}</dd>
       <dt>Genus</dt><dd>${show(e.genus)}</dd>
@@ -331,8 +335,9 @@ async function renderEntry(view, id) {
       <dt>Growth stage</dt><dd>${e.stage ? esc(stageLabel(e.stage) + (e.stageDetail ? ` (${e.stageDetail})` : '')) : NR}</dd>
       <dt>Population</dt><dd>${e.population != null && e.population !== '' ? `${esc(e.population)} (${e.popMethod === 'estimated' ? 'estimated' : 'counted'})` : NR}</dd>
       <dt>Abundance</dt><dd>${show(e.abundance)}</dd>
-      <dt>Date</dt><dd>${show([fmtDate(e.date), e.time].filter(Boolean).join(' '))}</dd>
-      <dt>Coordinates</dt><dd>${esc(formatCoord(e.lat, e.lng))}${e.accuracy != null ? ` <span class="muted">±${e.accuracy} m</span>` : ''}</dd>
+      <dt>Date</dt><dd>${show([fmtDate(e.date), e.time].filter(Boolean).join(' '))}${e.dateSource ? ` <span class="muted small">${esc(e.dateSource)}${e.cameraModel ? `, ${esc(e.cameraModel)}` : ''}</span>` : ''}</dd>
+      <dt>Coordinates</dt><dd>${esc(formatCoord(e.lat, e.lng))}${e.accuracy != null ? ` <span class="muted">±${e.accuracy} m</span>` : ''}${e.locationSource ? ` <span class="muted small">${esc(e.locationSource)}</span>` : ''}${e.lat != null ? ` <a class="small" href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lng}" target="_blank" rel="noopener">Open in Google Maps</a>` : ''}</dd>
+      <dt>District</dt><dd>${show(e.district)}</dd>
       <dt>Altitude</dt><dd>${e.altitude != null ? `${e.altitude.toLocaleString()} m <span class="muted">${esc(e.altitudeSource || '')}</span>` : NR}</dd>
       <dt>Locality</dt><dd>${show(e.locality)}</dd>
       <dt>Habitat</dt><dd>${show(e.habitat)}</dd>
@@ -708,12 +713,11 @@ async function renderMore(view, _a, params) {
   const last = await getMeta('lastBackup');
   const id = identSettings();
   const use = await usageToday();
-  const cr = await credits();
   view.innerHTML = `
     <section class="about-hero">
       <h2>Field Notes</h2>
-      <p>A field journal for documenting the plants of the Eastern Himalaya. Each observation keeps photos, GPS position and altitude, growth stage and population size. It works without signal and builds species distribution maps and phenology charts from your own records.</p>
-      <div class="dev"><span class="av">${DEVELOPER[0]}</span><div><b>Developed by ${esc(DEVELOPER)}</b><small>Tawang, Arunachal Pradesh. Version ${APP_VERSION}</small></div></div>
+      <p>A field journal for documenting the flora of Arunachal Pradesh. Record plants in the field or add camera photos later; each observation keeps its photos, location and altitude, date, growth stage and population size. Identification suggestions are checked against regional records, and your own records build district-wise distribution maps and phenology charts. Works without signal.</p>
+      <div class="dev"><span class="av">${DEVELOPER[0]}</span><div><b>Developed by ${esc(DEVELOPER)}</b><small>Arunachal Pradesh. Version ${APP_VERSION}. Home screen photographs by ${esc(DEVELOPER)}.</small></div></div>
     </section>
 
     <section class="card" id="backupCard">
@@ -740,11 +744,18 @@ async function renderMore(view, _a, params) {
     </section>
 
     <section class="card" id="identCard">
-      <h3>Plant name suggestions</h3>
-      <p class="small">Live suggestions in the camera and on entries come from <a href="https://my.plantnet.org" target="_blank" rel="noopener">Pl@ntNet</a>. Create a free account there, copy your API key and paste it below (500 identifications a day). Suggestions need internet; the flower and leaf callouts in the camera work offline.</p>
-      <label class="field"><span>Pl@ntNet API key</span><input id="idKey" value="${esc(id.key || '')}" autocomplete="off" spellcheck="false" placeholder="Paste your key" /></label>
-      <div class="switch-row"><span>Live suggestions while the camera is open</span><label class="switch"><input type="checkbox" id="idLive" ${id.live !== false ? 'checked' : ''}><span></span></label></div>
-      <p class="muted small">Used today: ${use.used}${use.remaining != null ? `, ${use.remaining} remaining on your key` : ''}.</p>
+      <h3>Identification suggestions</h3>
+      <p class="small">Entries with photos get name suggestions from up to two engines. Add at least one key; with both, their answers are combined and agreement raises the score. Every name is then checked in GBIF for records in Arunachal Pradesh and India.</p>
+      <label class="field"><span>Google Gemini API key (recommended)</span>
+        <div class="taxon-input"><input id="gemKey" value="${esc(id.geminiKey || '')}" autocomplete="off" spellcheck="false" placeholder="Paste your key" style="font-family:var(--sans);font-style:normal" /><button class="btn btn-small btn-outline" id="gemTest" type="button">Test</button></div></label>
+      <p class="muted small" id="gemMsg">Free key: sign in at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> and tap “Create API key”. Gemini also uses the location, altitude and date of the entry and lists the features it can see. On the free tier Google may use the photos to improve its products.</p>
+      <label class="field"><span>Pl@ntNet API key</span>
+        <div class="taxon-input"><input id="idKey" value="${esc(id.key || '')}" autocomplete="off" spellcheck="false" placeholder="Paste your key" style="font-family:var(--sans);font-style:normal" /><button class="btn btn-small btn-outline" id="pnTest" type="button">Test</button></div></label>
+      <p class="muted small" id="pnMsg">Free key at <a href="https://my.plantnet.org" target="_blank" rel="noopener">my.plantnet.org</a> (500 identifications a day). In your Pl@ntNet account, leave “authorized domains” empty.</p>
+      <p class="muted small">Used today: Gemini ${use.gemini || 0}, Pl@ntNet ${use.plantnet || 0}${use.remaining != null ? ` (${use.remaining} Pl@ntNet left)` : ''}.</p>
+      <details style="margin-top:.6rem"><summary class="small" style="cursor:pointer;font-weight:600">Experimental: live ID in the camera</summary>
+        <div class="switch-row"><span class="small">Show flower and leaf callouts and live name suggestions while the camera is open. Off by default; it can be slow and unreliable.</span><label class="switch"><input type="checkbox" id="idLive" ${id.liveCamera ? 'checked' : ''}><span></span></label></div>
+      </details>
     </section>
 
     <section class="card">
@@ -762,9 +773,7 @@ async function renderMore(view, _a, params) {
 
     <section class="card" id="creditsCard">
       <h3>Sources and credits</h3>
-      <p class="small">Names and details: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Pl@ntNet. Elevation and contours: AWS Terrain Tiles (SRTM and others) and Copernicus DEM via Open-Meteo. Maps: Esri (light grey canvas and World Imagery), OpenStreetMap contributors, OpenTopoMap. Boundaries: DataMeet (CC BY 4.0; district boundaries as of Census 2011, so districts created later are not shown).</p>
-      <p class="small"><b>Home screen photos</b> (Wikimedia Commons):</p>
-      <ul class="credits">${cr.map((c) => `<li><em>${esc(c.species)}</em>: ${esc(c.artist)}, <a href="${esc(c.licenseUrl || c.source)}" target="_blank" rel="noopener">${esc(c.license)}</a>, <a href="${esc(c.source)}" target="_blank" rel="noopener">source</a></li>`).join('')}</ul>
+      <p class="small">Names and records: GBIF Backbone Taxonomy and occurrence data, iNaturalist, Wikipedia. Identification: Google Gemini, Pl@ntNet. Elevation and contours: AWS Terrain Tiles (SRTM and others) and Copernicus DEM via Open-Meteo. Place and district names: OpenStreetMap (Nominatim). Maps: Esri (light grey canvas and World Imagery), OpenStreetMap contributors, OpenTopoMap. Boundaries: DataMeet (CC BY 4.0; district boundaries as of Census 2011).</p>
     </section>`;
 
   const prog = $('#bkProgress');
@@ -787,8 +796,20 @@ async function renderMore(view, _a, params) {
   $('#bkRestore').onclick = () => $('#importInput').click();
   $('#expCsv').onclick = () => download(`field-notes-${todayISO()}.csv`, toCSV(state.entries), 'text/csv');
   $('#expGeo').onclick = () => download(`field-notes-${todayISO()}.geojson`, toGeoJSON(state.entries), 'application/geo+json');
-  $('#idKey').addEventListener('change', async (ev) => { await saveIdentSettings({ key: ev.target.value.trim() }); haptic.success(); toast(ev.target.value.trim() ? 'Pl@ntNet key saved.' : 'Key removed.'); });
-  $('#idLive').addEventListener('change', async (ev) => { await saveIdentSettings({ live: ev.target.checked }); haptic.select(); });
+  $('#idKey').addEventListener('change', async (ev) => { await saveIdentSettings({ key: ev.target.value.trim() }); haptic.success(); toast(ev.target.value.trim() ? 'Pl@ntNet key saved.' : 'Pl@ntNet key removed.'); });
+  $('#gemKey').addEventListener('change', async (ev) => { await saveIdentSettings({ geminiKey: ev.target.value.trim(), geminiResolved: null }); haptic.success(); toast(ev.target.value.trim() ? 'Gemini key saved.' : 'Gemini key removed.'); });
+  const tester = (engine, input, btn, msg) => $(btn).addEventListener('click', async () => {
+    const key = $(input).value.trim();
+    await saveIdentSettings(engine === 'gemini' ? { geminiKey: key, geminiResolved: null } : { key });
+    const b = $(btn); b.disabled = true; b.textContent = 'Testing…';
+    const r = await testKey(engine, key);
+    b.disabled = false; b.textContent = 'Test';
+    const m = $(msg); m.textContent = r.message; m.className = `small ${r.ok ? 'ok' : 'warn'}`;
+    r.ok ? haptic.success() : haptic.warning();
+  });
+  tester('gemini', '#gemKey', '#gemTest', '#gemMsg');
+  tester('plantnet', '#idKey', '#pnTest', '#pnMsg');
+  $('#idLive').addEventListener('change', async (ev) => { await saveIdentSettings({ liveCamera: ev.target.checked }); haptic.select(); });
   $('#setRecorder').addEventListener('change', async (ev) => { state.settings.recorder = ev.target.value.trim(); await setMeta('settings', state.settings); toast('Saved.'); });
   $('#setHaptics').addEventListener('change', async (ev) => { state.settings.haptics = ev.target.checked; setHaptics(ev.target.checked); await setMeta('settings', state.settings); haptic.select(); });
   $('#persistBtn')?.addEventListener('click', async () => { const ok = await requestPersistence(); toast(ok ? 'Storage is now persistent.' : 'The browser declined. Install the app to the home screen and try again.'); router(); });
@@ -811,16 +832,16 @@ async function download(filename, text, type) {
 function toCSV(entries) {
   const cols = ['occurrenceID', 'identificationStatus', 'scientificName', 'scientificNameAuthorship', 'family', 'genus', 'taxonRank', 'vernacularName', 'localName',
     'identificationQualifier', 'fieldLabel', 'eventDate', 'eventTime', 'decimalLatitude', 'decimalLongitude', 'coordinateUncertaintyInMeters',
-    'minimumElevationInMeters', 'elevationSource', 'locality', 'habitat', 'reproductiveCondition', 'growthStageBBCH', 'individualCount', 'individualCountMethod', 'abundance',
-    'recordedBy', 'recordNumber', 'herbarium', 'occurrenceRemarks', 'tags', 'ethnoUse', 'ethnoPartUsed', 'ethnoPreparation', 'ethnoCommunity', 'photoCount', 'gbifTaxonKey', 'suggestedName', 'suggestedScore'];
+    'minimumElevationInMeters', 'elevationSource', 'stateProvince', 'county', 'locality', 'georeferenceSources', 'habitat', 'reproductiveCondition', 'growthStageBBCH', 'individualCount', 'individualCountMethod', 'abundance',
+    'recordedBy', 'recordNumber', 'herbarium', 'occurrenceRemarks', 'tags', 'ethnoUse', 'ethnoPartUsed', 'ethnoPreparation', 'ethnoCommunity', 'photoCount', 'gbifTaxonKey', 'suggestedName', 'suggestedScore', 'eventDateSource', 'cameraModel'];
   const q = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const bbch = Object.fromEntries(STAGES.map((s) => [s.key, s.bbch]));
   const rows = entries.map((e) => [e.id, e.status, e.scientificName, e.authorship, e.family, e.genus, e.rank, e.commonName, e.localName,
     e.scientificName && e.idConfidence === 'tentative' ? 'cf.' : '', e.fieldLabel, e.date, e.time, e.lat, e.lng, e.accuracy,
-    e.altitude, e.altitudeSource, e.locality, e.habitat, e.stage ? stageLabel(e.stage) + (e.stageDetail ? ` (${e.stageDetail})` : '') : '', e.stage ? bbch[e.stage] : '',
+    e.altitude, e.altitudeSource, 'Arunachal Pradesh', e.district, e.locality, [e.locationSource, e.mapsLink].filter(Boolean).join(' | '), e.habitat, e.stage ? stageLabel(e.stage) + (e.stageDetail ? ` (${e.stageDetail})` : '') : '', e.stage ? bbch[e.stage] : '',
     e.population, e.population ? e.popMethod || 'counted' : '', e.abundance, e.voucher?.collector || e.recordedBy, e.voucher?.number, e.voucher?.herbarium,
     e.notes, (e.tags || []).join('|'), e.ethno?.use, e.ethno?.part, e.ethno?.prep, e.ethno?.community, (e.photoIds || []).length, e.taxonInfo?.gbif?.usageKey,
-    e.suggestions?.[0]?.name, e.suggestions?.[0]?.score != null ? e.suggestions[0].score.toFixed(3) : ''].map(q).join(','));
+    e.suggestions?.[0]?.name, e.suggestions?.[0]?.score != null ? e.suggestions[0].score.toFixed(3) : '', e.dateSource, e.cameraModel].map(q).join(','));
   return '﻿' + [cols.join(','), ...rows].join('\n');
 }
 
@@ -828,7 +849,7 @@ function toGeoJSON(entries) {
   return JSON.stringify({ type: 'FeatureCollection', features: entries.filter((e) => e.lat != null).map((e) => ({
     type: 'Feature', geometry: { type: 'Point', coordinates: e.altitude != null ? [e.lng, e.lat, e.altitude] : [e.lng, e.lat] },
     properties: { id: e.id, status: e.status, scientificName: e.scientificName || null, fieldLabel: e.fieldLabel || null, family: e.family || null,
-      date: e.date, altitude: e.altitude, accuracy: e.accuracy, locality: e.locality || null, stage: e.stage || null, population: e.population ?? null },
+      date: e.date, altitude: e.altitude, accuracy: e.accuracy, district: e.district || null, locality: e.locality || null, stage: e.stage || null, population: e.population ?? null },
   })) }, null, 1);
 }
 
@@ -863,7 +884,7 @@ async function savePhotoFile(fileOrBlob) {
   return { id, exif: p.exif };
 }
 
-async function intakeFiles(files) {
+async function intakeFiles(files, { source = 'gallery' } = {}) {
   if (!files.length) return;
   toast(`Processing ${files.length} photo${files.length > 1 ? 's' : ''}…`, { ms: 8000 });
   const saved = [];
@@ -874,14 +895,14 @@ async function intakeFiles(files) {
   $('#toast').classList.remove('show');
   if (form.open) { for (const s of saved) await form.addPhoto(s.id, s.exif); }
   else if (camera.open) { for (const s of saved) await camera.addShot(s.id); }
-  else await openForm({ photos: saved });
+  else await openForm({ photos: saved, source });
 }
-$('#nativeCamInput').addEventListener('change', (ev) => { const files = [...ev.target.files]; ev.target.value = ''; intakeFiles(files); });
-$('#galleryInput').addEventListener('change', (ev) => { const files = [...ev.target.files]; ev.target.value = ''; intakeFiles(files); });
+$('#nativeCamInput').addEventListener('change', (ev) => { const files = [...ev.target.files]; ev.target.value = ''; intakeFiles(files, { source: 'camera' }); });
+$('#galleryInput').addEventListener('change', (ev) => { const files = [...ev.target.files]; ev.target.value = ''; intakeFiles(files, { source: 'gallery' }); });
 
 /* ================= CAMERA with live callouts and suggestions ================= */
 function compactSuggestions(r) {
-  return (r?.species || []).slice(0, 5).map((s) => ({ name: s.name, family: s.family, genus: s.genus, common: s.common, score: s.score, gbif: s.gbif, source: 'Pl@ntNet', at: new Date().toISOString() }));
+  return (r?.species || []).slice(0, 5).map((s) => ({ name: s.name, family: s.family, genus: s.genus, common: s.common || '', score: s.score, sources: { [r.engine || 'plantnet']: s.score }, reason: s.reason || '', at: new Date().toISOString() }));
 }
 
 const camera = {
@@ -897,14 +918,20 @@ const camera = {
     $('#cameraSheet').classList.remove('hidden');
     document.body.classList.add('no-scroll');
     pushOverlay('camera', () => this.close('back'));
-    this.setLive(identSettings().live !== false, false);
+    // Live ID is an experimental option (Settings); by default this is a plain camera.
+    this.liveEnabled = !!identSettings().liveCamera;
+    $('#camLive').classList.toggle('hidden', !this.liveEnabled);
+    $('#cameraSheet').classList.toggle('plain', !this.liveEnabled);
+    this.setLive(this.liveEnabled);
     this.locate();
     this.live = this.live || new LiveCamera($('#cameraVideo'));
     try {
       await this.live.start();
       $('#camTorch').classList.toggle('hidden', !this.live.torchSupported());
-      this.scanner = new MorphScanner($('#cameraVideo'), { onChange: (s) => this.onScan(s) });
-      this.scanner.start();
+      if (this.liveEnabled) {
+        this.scanner = new MorphScanner($('#cameraVideo'), { onChange: (s) => this.onScan(s) });
+        this.scanner.start();
+      }
     } catch (err) {
       const denied = err.name === 'NotAllowedError';
       const el = $('#camError');
@@ -915,11 +942,10 @@ const camera = {
     }
   },
 
-  setLive(on, save = true) {
-    this.liveOn = on;
-    const b = $('#camLive'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
-    if (!on) { $('#camSuggest').innerHTML = ''; this.hint(''); }
-    if (save) saveIdentSettings({ live: on });
+  setLive(on) {
+    this.liveOn = on && this.liveEnabled;
+    const b = $('#camLive'); b.classList.toggle('on', this.liveOn); b.setAttribute('aria-pressed', this.liveOn);
+    if (!this.liveOn) { $('#camSuggest').innerHTML = ''; this.hint(''); $('#camOverlay').innerHTML = ''; this.nodes?.clear(); }
   },
 
   hint(text) {
@@ -939,7 +965,7 @@ const camera = {
 
   // Morphology callouts: thin corner brackets with a small label, smoothed by CSS transitions.
   onScan(snap) {
-    if (!this.open) return;
+    if (!this.open || !this.liveOn) return;
     this.lastSnap = snap;
     const video = $('#cameraVideo');
     const tf = coverTransform(video);
@@ -996,15 +1022,15 @@ const camera = {
   async maybeIdentify(snap, flowers) {
     if (!this.liveOn) return;
     const found = flowers.length || snap.foliage;
-    if (!identSettings().key) {
-      if (found && !this.noKeyShown) { this.hint('Add a Pl@ntNet key in Settings for name suggestions'); this.noKeyShown = true; setTimeout(() => this.hint(''), 4000); }
+    if (!engines().plantnet && !engines().gemini) {
+      if (found && !this.noKeyShown) { this.hint('Add a Gemini or Pl@ntNet key in Settings for name suggestions'); this.noKeyShown = true; setTimeout(() => this.hint(''), 4000); }
       return;
     }
     if (!navigator.onLine) { this.hint(found ? 'Offline: name suggestions need internet' : ''); return; }
     if (this.inflight) return;
     if (!found) { if (!this.suggestions.length) this.hint('Point at a flower or leaves'); return; }
     if (!snap.still) { this.hint(this.suggestions.length ? '' : 'Hold steady to identify'); return; }
-    if (Date.now() - this.lastIdAt < 4000) return;
+    if (Date.now() - this.lastIdAt < (engines().plantnet ? 4000 : 9000)) return;
     // Don't send the same view twice.
     const sig = this.scanner?.prevSig;
     if (sig && this.lastIdSig) { let d = 0; for (let i = 0; i < 64; i++) d += Math.abs(sig[i] - this.lastIdSig[i]); if (d / 64 < 9) return; }
@@ -1015,7 +1041,7 @@ const camera = {
     $('#camLive').classList.add('busy'); this.hint('Identifying…');
     try {
       const blob = await frameToBlob($('#cameraVideo'), 900);
-      const r = await identify([{ blob, organ }], { results: 5, signal: ctrl.signal });
+      const r = await identify([{ blob, organ }], { results: 5 });
       if (!this.open) return;
       this.renderSuggestions(r, organ);
     } catch (err) {
@@ -1143,7 +1169,8 @@ function baseEntry() {
     scientificName: '', authorship: '', family: '', genus: '', rank: '', commonName: '', localName: '',
     idConfidence: 'certain', fieldLabel: '', date: todayISO(), time: nowHM(),
     lat: null, lng: null, accuracy: null, altitude: null, altitudeSource: '',
-    locality: '', habitat: '', stage: '', stageDetail: '', population: null, popMethod: 'counted', abundance: '', notes: '', tags: [],
+    locality: '', district: '', habitat: '', stage: '', stageDetail: '', population: null, popMethod: 'counted', abundance: '', notes: '', tags: [],
+    mapsLink: '', locationSource: '', dateSource: 'Device clock', cameraModel: '',
     voucher: { collector: state.settings.recorder || '', number: '', herbarium: '' }, ethno: {},
     recordedBy: state.settings.recorder || '', photoIds: [], taxonInfo: null, suggestions: null,
   };
@@ -1153,14 +1180,19 @@ const F = {
   scientificName: '#fScientific', family: '#fFamily', genus: '#fGenus', commonName: '#fCommon', localName: '#fLocal',
   idConfidence: '#fConfidence', fieldLabel: '#fLabel', lat: '#fLat', lng: '#fLng', altitude: '#fAlt', accuracy: '#fAcc',
   date: '#fDate', time: '#fTime', locality: '#fLocality', habitat: '#fHabitat', abundance: '#fAbundance', notes: '#fNotes', population: '#fPopulation',
+  district: '#fDistrict', mapsLink: '#fMapsLink',
 };
+const DISTRICTS = ['Anjaw', 'Bichom', 'Changlang', 'Dibang Valley', 'East Kameng', 'East Siang', 'Itanagar Capital Complex', 'Kamle', 'Keyi Panyor', 'Kra Daadi',
+  'Kurung Kumey', 'Lepa-Rada', 'Lohit', 'Longding', 'Lower Dibang Valley', 'Lower Siang', 'Lower Subansiri', 'Namsai', 'Pakke-Kessang', 'Papum Pare',
+  'Shi-Yomi', 'Siang', 'Tawang', 'Tirap', 'Upper Siang', 'Upper Subansiri', 'West Kameng', 'West Siang'];
+$('#districtList').innerHTML = DISTRICTS.map((d) => `<option value="${d}">`).join('');
 const ETHNO = { use: '#eUse', part: '#ePart', prep: '#ePrep', community: '#eCommunity', informant: '#eInformant', age: '#eAge', gender: '#eGender', consent: '#eConsent' };
 const NUM = new Set(['lat', 'lng', 'altitude', 'accuracy', 'population']);
 
 const form = {
   open: false, entry: null, isNew: true, photoIds: [], originalPhotoIds: [], group: 'Plant',
   stage: '', stageDetail: '', popMethod: 'counted',
-  auto: new Set(), altitudeSource: '', taxonInfo: null, lookedUpName: '', dirty: false, gpsRun: 0,
+  auto: new Set(), altitudeSource: '', locationSource: '', dateSource: '', cameraModel: '', districtSource: '', taxonInfo: null, lookedUpName: '', dirty: false, gpsRun: 0,
   suggestions: null, suggestRun: 0, suggestedFor: '',
 
   fill(e) {
@@ -1172,12 +1204,16 @@ const form = {
     this.group = e.group || 'Plant';
     this.stage = e.stage || ''; this.stageDetail = e.stageDetail || ''; this.popMethod = e.popMethod || 'counted';
     this.altitudeSource = e.altitudeSource || '';
+    this.locationSource = e.locationSource || (e.lat != null ? (e.accuracy != null ? 'Phone GPS' : 'Entered') : '');
+    this.dateSource = e.dateSource || '';
+    this.cameraModel = e.cameraModel || '';
+    this.districtSource = e.districtSource || '';
     this.taxonInfo = e.taxonInfo || null;
     this.lookedUpName = e.taxonInfo ? e.scientificName : '';
-    this.suggestions = e.suggestions ? { species: e.suggestions, genera: [], families: [], stored: true } : null;
+    this.suggestions = e.suggestions ? { species: e.suggestions, genera: e.idGenera || [], families: e.idFamilies || [], features: e.idFeatures || [], checkNext: e.idCheckNext || '', stored: true } : null;
     $('#voucherBox').open = !!(e.voucher?.number);
     $('#ethnoBox').open = !!(e.ethno && Object.values(e.ethno).some(Boolean));
-    this.renderGroup(); this.renderStages(); this.renderPopMethod(); this.renderAltSource();
+    this.renderGroup(); this.renderStages(); this.renderPopMethod(); this.renderAltSource(); this.renderDateSource(); this.renderLocSource();
     $('#lookupPanel').classList.toggle('hidden', !this.taxonInfo);
     if (this.taxonInfo) $('#lookupPanel').innerHTML = infoHTML(this.taxonInfo);
   },
@@ -1198,12 +1234,24 @@ const form = {
     e.popMethod = this.popMethod; e.photoIds = [...this.photoIds];
     delete e.phenology;
     e.altitudeSource = e.altitude != null ? this.altitudeSource || 'Manual' : '';
+    e.locationSource = e.lat != null ? this.locationSource || 'Entered' : '';
+    e.dateSource = this.dateSource || 'Entered';
+    e.cameraModel = this.cameraModel || '';
+    e.districtSource = e.district ? this.districtSource || 'Entered' : '';
     e.taxonInfo = this.taxonInfo && this.lookedUpName && normName(this.lookedUpName) === e.scientificName ? this.taxonInfo : null;
     if (e.taxonInfo) { const f = fieldsFrom(e.taxonInfo); e.authorship = f.authorship || ''; e.rank = f.rank || ''; }
     else if (!e.scientificName) { e.authorship = ''; e.rank = ''; }
-    e.suggestions = this.suggestions?.species?.length
-      ? this.suggestions.species.slice(0, 5).map((s) => ({ name: s.name, family: s.family, genus: s.genus, common: s.common, score: s.score, gbif: s.gbif, source: 'Pl@ntNet', at: s.at || new Date().toISOString() }))
-      : (this.entry.suggestions || null);
+    if (this.suggestions?.species) {
+      const r = this.suggestions;
+      e.suggestions = r.species.slice(0, 5).map((x) => ({ name: x.name, family: x.family || '', genus: x.genus || '', common: x.common || '', score: x.rank ?? x.score,
+        sources: x.sources || (x.source ? { [/plant/i.test(x.source) ? 'plantnet' : 'gemini']: x.score } : {}), agree: !!x.agree, reason: x.reason || '',
+        gbif: x.gbif && typeof x.gbif === 'object' ? { arunachal: x.gbif.arunachal ?? null, india: x.gbif.india ?? null, accepted: x.gbif.accepted || null, matched: x.gbif.matched } : null,
+        at: x.at || new Date().toISOString() }));
+      e.idFeatures = r.features || this.entry.idFeatures || [];
+      e.idCheckNext = r.checkNext || this.entry.idCheckNext || '';
+      e.idGenera = (r.genera || []).slice(0, 3).map((g) => ({ name: g.name, score: g.score, family: g.family || '' }));
+      e.idFamilies = (r.families || []).slice(0, 2).map((f) => ({ name: f.name, score: f.score }));
+    } else e.suggestions = this.entry.suggestions || null;
     return e;
   },
 
@@ -1220,7 +1268,24 @@ const form = {
     fd.innerHTML = FLOWERING_DETAIL.map((d) => `<button type="button" class="chip ${this.stageDetail === d.key ? 'on' : ''}" data-fd="${d.key}">${d.label}</button>`).join('');
   },
   renderPopMethod() { $$('#popMethod button').forEach((b) => b.classList.toggle('on', b.dataset.m === this.popMethod)); },
-  renderAltSource() { $('#altSource').textContent = $('#fAlt').value ? `Altitude source: ${this.altitudeSource || 'Manual'}` : ''; },
+  renderAltSource() { $('#altSource').textContent = $('#fAlt').value ? `Altitude: ${this.altitudeSource || 'entered'}` : ''; },
+  renderDateSource() {
+    const el = $('#dateSource');
+    const src = this.dateSource || '';
+    el.innerHTML = src ? `<span class="dot-src ${/metadata/i.test(src) ? 'ok' : ''}"></span>${esc(src)}${this.cameraModel ? `, ${esc(this.cameraModel)}` : ''}` : '';
+  },
+  renderLocSource(msg) {
+    const el = $('#gpsStatus');
+    const lat = $('#fLat').value, lng = $('#fLng').value;
+    if (msg) { el.innerHTML = msg; }
+    else if (lat && lng) {
+      const out = !inArunachalBox(+lat, +lng);
+      el.innerHTML = `<span class="dot-src ok"></span>${esc(this.locationSource || 'Entered')}${out ? ' <span class="warn-inline">Outside Arunachal Pradesh, check the coordinates</span>' : ''}`;
+    } else el.textContent = 'No location yet. Paste a Google Maps link, or use the phone GPS if you are at the spot.';
+    const open = $('#mapsOpen');
+    open.classList.toggle('hidden', !(lat && lng));
+    if (lat && lng) open.href = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  },
 
   async renderPhotos() {
     const html = [];
@@ -1238,40 +1303,70 @@ const form = {
       this.gpsRun++;
       this.setAuto('lat', exif.lat); this.setAuto('lng', exif.lng); $('#fAcc').value = '';
       if (exif.alt != null) { this.setAuto('altitude', exif.alt); this.altitudeSource = 'Photo EXIF GPS'; this.renderAltSource(); }
-      $('#gpsStatus').textContent = 'Location taken from photo';
+      this.locationSource = 'Photo metadata (GPS)'; this.renderLocSource();
       this.afterFix({ lat: exif.lat, lng: exif.lng, altitude: exif.alt ?? null });
     }
-    if (exif.date && this.isNew && this.auto.has('date')) { this.setAuto('date', exif.date); if (exif.time) this.setAuto('time', exif.time); }
+    this.applyPhotoDate(exif);
     this.changed();
     renderSuggestCard(true);
   },
 
+  // Date and time from the photo's metadata (DSLR or phone), unless the user typed a date.
+  applyPhotoDate(exif = {}) {
+    if (!exif.date) return false;
+    if (!this.auto.has('date') && $('#fDate').value && !/device|no date/i.test(this.dateSource)) return false;
+    this.setAuto('date', exif.date);
+    if (exif.time) this.setAuto('time', exif.time);
+    this.dateSource = 'From photo metadata'; this.cameraModel = exif.camera || '';
+    this.renderDateSource();
+    return true;
+  },
   setAuto(name, value) { $(F[name]).value = value ?? ''; this.auto.add(name); },
   canAuto(name) { return $(F[name]).value === '' || this.auto.has(name); },
 
   async locate() {
     const run = ++this.gpsRun;
-    const st = $('#gpsStatus');
-    st.textContent = 'Getting a GPS fix…';
+    this.renderLocSource('Getting a GPS fix…');
     $('#gpsBtn').disabled = true;
     try {
-      const fix = await getBestFix({ maxMs: 20000, onUpdate: (f) => { if (run === this.gpsRun) { st.textContent = `Improving, ±${f.accuracy} m`; this.applyFix(f); } } });
+      const fix = await getBestFix({ maxMs: 20000, onUpdate: (f) => { if (run === this.gpsRun) { this.applyFix(f); this.renderLocSource(`Improving, ±${f.accuracy} m`); } } });
       if (run !== this.gpsRun) return;
       this.applyFix(fix);
-      st.textContent = `GPS fix ±${fix.accuracy} m`;
       haptic.tap();
       this.afterFix(fix);
-    } catch (err) { if (run === this.gpsRun) st.textContent = err.message; }
+    } catch (err) { if (run === this.gpsRun) this.renderLocSource(esc(err.message)); }
     finally { $('#gpsBtn').disabled = false; }
   },
 
   applyFix(fix) {
     this.setAuto('lat', fix.lat); this.setAuto('lng', fix.lng); this.setAuto('accuracy', fix.accuracy);
+    this.locationSource = `Phone GPS ±${fix.accuracy} m`;
     if (fix.altitude != null && this.canAuto('altitude')) { this.setAuto('altitude', fix.altitude); this.altitudeSource = `GPS ±${fix.altitudeAccuracy ?? '?'} m`; }
-    this.renderAltSource(); this.changed();
+    this.renderAltSource(); this.renderLocSource(); this.changed();
+  },
+
+  // Location from a Google Maps link or pasted coordinates (photos from a DSLR have no GPS).
+  async applyLink() {
+    const input = $('#fMapsLink').value.trim();
+    const btn = $('#mapsApply');
+    btn.disabled = true; this.renderLocSource('Reading the link…');
+    try {
+      const r = await locationFromInput(input);
+      this.gpsRun++;   // stop any running GPS fix from overwriting this
+      $('#fLat').value = r.lat; $('#fLng').value = r.lng; $('#fAcc').value = '';
+      this.auto.delete('lat'); this.auto.delete('lng'); this.auto.delete('accuracy');
+      this.locationSource = `Google Maps link (${r.how})`;
+      if (this.altitudeSource && /GPS/.test(this.altitudeSource)) { $('#fAlt').value = ''; this.auto.add('altitude'); }
+      this.renderLocSource(); haptic.success();
+      await this.afterFix({ lat: r.lat, lng: r.lng, altitude: null });
+      this.changed();
+      if (!this.suggestions && this.photoIds.length && !$('#fScientific').value.trim()) renderSuggestCard(true);
+    } catch (err) { this.renderLocSource(`<span class="warn-inline">${esc(err.message)}</span>`); haptic.warning(); }
+    finally { btn.disabled = false; }
   },
 
   async afterFix(fix) {
+    this.fillDistrict(fix.lat, fix.lng);
     if (!navigator.onLine) return;
     if (fix.altitude == null && this.canAuto('altitude')) {
       try {
@@ -1279,8 +1374,21 @@ const form = {
         if (z != null && this.canAuto('altitude')) { this.setAuto('altitude', z); this.altitudeSource = 'Elevation model (Copernicus 90 m)'; this.renderAltSource(); this.changed(); }
       } catch { /* leave empty */ }
     }
-    if (this.canAuto('locality')) {
-      try { const name = await placeName(fix.lat, fix.lng); if (name && this.canAuto('locality')) { this.setAuto('locality', name); this.changed(); } } catch { /* ignore */ }
+    if (this.canAuto('locality') || this.canAuto('district')) {
+      try {
+        const p = await placeName(fix.lat, fix.lng);
+        if (p?.name && this.canAuto('locality')) { this.setAuto('locality', p.name); this.changed(); }
+        if (p?.district && this.canAuto('district')) { this.setAuto('district', p.district); this.districtSource = 'OpenStreetMap'; this.changed(); }
+      } catch { /* ignore */ }
+    }
+  },
+
+  // Offline district from the 2011 boundaries; replaced by OpenStreetMap's current district when online.
+  async fillDistrict(lat, lng) {
+    if (lat == null || !this.canAuto('district')) return;
+    const d = await district2011(+lat, +lng);
+    if (d && this.canAuto('district') && (!$('#fDistrict').value || this.districtSource !== 'OpenStreetMap')) {
+      this.setAuto('district', d); this.districtSource = 'Census 2011 boundaries'; this.changed();
     }
   },
 
@@ -1324,19 +1432,56 @@ $('#formPhotos').addEventListener('click', (ev) => {
 $('#formCamera').addEventListener('click', () => $('#nativeCamInput').click());
 $('#formGallery').addEventListener('click', () => $('#galleryInput').click());
 $('#gpsBtn').addEventListener('click', () => form.locate());
+$('#mapsApply').addEventListener('click', () => form.applyLink());
+$('#fMapsLink').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); form.applyLink(); } });
+$('#fMapsLink').addEventListener('paste', () => setTimeout(() => { if ($('#fMapsLink').value.trim()) form.applyLink(); }, 50));
+$('#mapsPaste').addEventListener('click', async () => {
+  let text = '';
+  try { text = isNative() ? (await window.Capacitor.nativePromise('Clipboard', 'read', {})).value : await navigator.clipboard.readText(); } catch { /* blocked */ }
+  if (!text) { $('#fMapsLink').focus(); toast('Long-press the field and choose Paste.'); return; }
+  $('#fMapsLink').value = text.trim(); haptic.tap(); form.applyLink();
+});
+for (const id of ['#fLat', '#fLng']) $(id).addEventListener('input', () => { form.locationSource = 'Entered'; form.renderLocSource(); });
+$('#fLng').addEventListener('change', () => { const la = +$('#fLat').value, ln = +$('#fLng').value; if (la && ln) form.afterFix({ lat: la, lng: ln, altitude: null }); });
+for (const id of ['#fDate', '#fTime']) $(id).addEventListener('input', () => { form.dateSource = 'Entered'; form.cameraModel = form.cameraModel; form.renderDateSource(); });
+$('#fDistrict').addEventListener('input', () => { form.districtSource = 'Entered'; });
 
 /* ----- suggestions card (Pl@ntNet on the entry's photos) ----- */
+const ENGINE_LABEL = { gemini: 'Gemini', plantnet: 'Pl@ntNet' };
+function gbifBadge(g) {
+  if (!g) return '';
+  if (g.matched === false) return '<span class="gb warn">Name not found in GBIF</span>';
+  const parts = [];
+  if (g.accepted) parts.push(`<span class="gb warn">GBIF treats it as a synonym of <i>${esc(g.accepted)}</i></span>`);
+  if (g.arunachal > 0) parts.push(`<span class="gb ok">${g.arunachal.toLocaleString()} GBIF records in Arunachal</span>`);
+  else if (g.india > 0) parts.push(`<span class="gb">${g.india.toLocaleString()} in India, none in Arunachal on GBIF</span>`);
+  else if (g.india === 0) parts.push('<span class="gb warn">No GBIF records in India</span>');
+  return parts.join('');
+}
+
 function suggestionListHTML(r, { readOnly = false } = {}) {
-  const sp = (r.species || []).filter((s) => s.score >= 0.02).slice(0, 5);
+  const sp = (r.species || []).filter((s) => (s.rank ?? s.score) >= 0.02).slice(0, 5);
   const lead = [];
   if (r.families?.[0]) lead.push(`<button type="button" class="chip" data-fam="${esc(r.families[0].name)}" ${readOnly ? 'disabled' : ''}>Family ${esc(r.families[0].name)}, ${pct(r.families[0].score)}</button>`);
-  if (r.genera?.[0]) lead.push(`<button type="button" class="chip" data-gen="${esc(r.genera[0].name)}" ${readOnly ? 'disabled' : ''}>Genus ${esc(r.genera[0].name)}, ${pct(r.genera[0].score)}</button>`);
-  if (r.genera?.[1] && r.genera[1].score > 0.1) lead.push(`<button type="button" class="chip" data-gen="${esc(r.genera[1].name)}" ${readOnly ? 'disabled' : ''}>or ${esc(r.genera[1].name)}, ${pct(r.genera[1].score)}</button>`);
-  return `${lead.length ? `<div class="lead">${lead.join('')}</div>` : ''}
-    <div class="sugg-list">${sp.map((s, i) => `<button type="button" class="sugg" data-i="${i}" ${readOnly ? 'tabindex="-1"' : ''}>
-      <span class="sci">${esc(s.name)}</span><span class="score">${pct(s.score)}<span class="meter"><i style="width:${pct(s.score)}"></i></span></span>
-      <small>${esc([s.family, s.common].filter(Boolean).join(', '))}<span class="india" data-gbif="${esc(s.gbif || '')}"></span></small></button>`).join('')
-      || '<p class="muted small">No confident match.</p>'}</div>`;
+  for (const g of (r.genera || []).slice(0, 2)) if (g === r.genera[0] || g.score > 0.15) lead.push(`<button type="button" class="chip" data-gen="${esc(g.name)}" ${readOnly ? 'disabled' : ''}>${g === r.genera[0] ? 'Genus' : 'or'} <i>${esc(g.name)}</i>, ${pct(g.score)}</button>`);
+  const feats = (r.features || []).length ? `<div class="feats">${r.features.map((f) => `<span>${esc(f)}</span>`).join('')}</div>` : '';
+  return `${feats}${lead.length ? `<div class="lead">${lead.join('')}</div>` : ''}
+    <div class="sugg-list">${sp.map((s, i) => {
+      const score = s.rank ?? s.score;
+      const srcs = Object.entries(s.sources || {}).filter(([e]) => ENGINE_LABEL[e]).map(([e, v]) => `${ENGINE_LABEL[e]} ${pct(v)}`).join(', ');
+      return `<button type="button" class="sugg" data-i="${i}" ${readOnly ? 'tabindex="-1"' : ''}>
+      <span class="sci">${esc(s.name)}</span><span class="score">${pct(score)}<span class="meter"><i style="width:${pct(score)}"></i></span></span>
+      <small>${esc([s.family, s.common].filter(Boolean).join(', '))}${srcs ? ` · ${esc(srcs)}` : ''}${s.agree ? ' · <b class="agree">both engines</b>' : ''}</small>
+      ${s.reason ? `<small class="reason">${esc(s.reason)}</small>` : ''}
+      <span class="gbs">${gbifBadge(s.gbif)}</span></button>`;
+    }).join('') || '<p class="muted small">No confident species. Use the genus or family above, or keep it as a draft.</p>'}</div>
+    ${r.checkNext ? `<p class="small check-next"><b>To confirm:</b> ${esc(r.checkNext)}</p>` : ''}`;
+}
+
+function entryContext() {
+  const v = (id) => $(id).value.trim();
+  return { lat: v('#fLat') || null, lng: v('#fLng') || null, altitude: v('#fAlt') || null, date: v('#fDate'), district: v('#fDistrict'),
+    locality: v('#fLocality'), habitat: v('#fHabitat'), notes: v('#fNotes'), group: form.group };
 }
 
 async function renderSuggestCard(auto = false) {
@@ -1347,59 +1492,58 @@ async function renderSuggestCard(auto = false) {
   const named = !!$('#fScientific').value.trim();
   if (!hasPhotos && !r) { card.classList.add('hidden'); return; }
   card.classList.remove('hidden');
-  const head = `<h3><span>Suggestions</span><span class="src">Pl@ntNet</span></h3>`;
-  if (!identSettings().key) {
-    card.innerHTML = `${head}<p class="small">Get likely species, genus and family from your photos. Add a free Pl@ntNet API key in <a href="#/more?s=ident" id="sgKeyLink">Settings</a>.</p>`;
-    $('#sgKeyLink').onclick = async (e) => { e.preventDefault(); await closeForm({ viaBack: false, keep: true }); location.hash = '#/more?s=ident'; };
+  const en = engines();
+  const tags = Object.entries(en).filter(([, on]) => on).map(([e]) => `<span class="src">${ENGINE_LABEL[e]}</span>`).join('');
+  const head = `<h3><span>Suggestions</span><span>${tags}</span></h3>`;
+  if (!en.gemini && !en.plantnet) {
+    card.innerHTML = `${head}<p class="small">Get likely species, genus and family from your photos. Add a free Gemini key (recommended) or a Pl@ntNet key in <a href="#/more?s=ident" id="sgKeyLink">Settings</a>.</p>`;
+    $('#sgKeyLink').onclick = async (e) => { e.preventDefault(); await closeForm({}); location.hash = '#/more?s=ident'; };
     return;
   }
   const photoSig = form.photoIds.join(',');
   const canRun = hasPhotos && navigator.onLine;
-  if (auto && canRun && !named && form.suggestedFor !== photoSig && !(r && !r.stored && form.suggestedFor === photoSig)) { runEntrySuggestions(); return; }
+  const hasPlace = !!($('#fLat').value && $('#fLng').value) || !!$('#fDistrict').value;
+  if (auto && canRun && !named && hasPlace && form.suggestedFor !== photoSig) { runEntrySuggestions(); return; }
   if (!r) {
-    card.innerHTML = `${head}<p class="small muted">${navigator.onLine ? 'Get likely names from these photos.' : 'Offline. Suggestions need internet.'}</p>
-      <button type="button" class="btn btn-small btn-outline" id="sgRun" ${canRun ? '' : 'disabled'}>Suggest from photos</button>`;
+    card.innerHTML = `${head}<p class="small muted">${!navigator.onLine ? 'Offline. Suggestions need internet.' : hasPlace ? 'Get likely names from these photos.' : 'Add the location first (Google Maps link or GPS): suggestions use the district and altitude.'}</p>
+      <button type="button" class="btn btn-small btn-outline" id="sgRun" ${canRun ? '' : 'disabled'}>Suggest names from photos</button>`;
     $('#sgRun')?.addEventListener('click', runEntrySuggestions);
     return;
   }
-  card.innerHTML = `${head}${r.stored ? '<p class="muted small" style="margin-top:0">From the live camera.</p>' : ''}${suggestionListHTML(r)}
-    <p class="muted small">Scores are Pl@ntNet’s confidence. Check against a flora: species missing from its database can’t be suggested.</p>
-    ${canRun ? `<button type="button" class="btn btn-small btn-ghost" id="sgRun">${r.stored ? 'Suggest from saved photos' : 'Run again'}</button>` : ''}`;
+  const engNote = r.engines ? Object.entries(r.engines).filter(([, v]) => !v.ok).map(([e, v]) => `<p class="small warn">${ENGINE_LABEL[e]}: ${esc(v.error)}</p>`).join('') : '';
+  card.innerHTML = `${head}${r.stored ? '<p class="muted small" style="margin-top:0">Saved suggestions.</p>' : ''}${r.notPlant ? '<p class="small warn">No plant was recognised in these photos.</p>' : ''}${engNote}${suggestionListHTML(r)}
+    <p class="muted small">Scores are the engines’ confidence, adjusted for GBIF records in Arunachal Pradesh. Check against a regional flora before confirming.</p>
+    ${canRun ? `<button type="button" class="btn btn-small btn-ghost" id="sgRun">${r.stored ? 'Suggest again from these photos' : 'Run again'}</button>` : ''}`;
   $('#sgRun')?.addEventListener('click', runEntrySuggestions);
-  const sp = (r.species || []).filter((s) => s.score >= 0.02).slice(0, 5);
+  const sp = (r.species || []).filter((s) => (s.rank ?? s.score) >= 0.02).slice(0, 5);
   $$('.sugg', card).forEach((b) => b.addEventListener('click', () => applySuggestion(sp[+b.dataset.i])));
   $$('[data-gen]', card).forEach((b) => b.addEventListener('click', () => {
     const g = b.dataset.gen;
     if (form.canAuto('genus') || !$('#fGenus').value) form.setAuto('genus', g);
     if (!$('#fLabel').value) $('#fLabel').value = `${g} sp.`;
-    const fam = r.species.find((s) => s.genus === g)?.family;
+    const fam = (r.genera || []).find((x) => x.name === g)?.family || (r.species || []).find((x) => x.genus === g)?.family;
     if (fam && (form.canAuto('family') || !$('#fFamily').value)) form.setAuto('family', fam);
-    haptic.select(); form.changed(); toast(`Genus set to ${g}. Kept as draft until you confirm the species.`);
+    haptic.select(); form.changed(); toast(`Genus set to ${g}. Kept as a draft until you confirm the species.`);
   }));
   $$('[data-fam]', card).forEach((b) => b.addEventListener('click', () => {
     form.setAuto('family', b.dataset.fam); haptic.select(); form.changed(); toast(`Family set to ${b.dataset.fam}.`);
   }));
-  // Is each suggested species known from India? (GBIF occurrence count)
-  for (const el of $$('.india', card)) {
-    const k = el.dataset.gbif; if (!k) continue;
-    indiaRecords(k).then((n) => { if (n == null) return; el.textContent = n > 0 ? `. GBIF: ${n.toLocaleString()} records in India` : '. GBIF: no records in India'; });
-  }
 }
 
 async function runEntrySuggestions() {
   const card = $('#suggestCard');
   const run = ++form.suggestRun;
-  const photoSig = form.photoIds.join(',');
-  form.suggestedFor = photoSig;
+  form.suggestedFor = form.photoIds.join(',');
   card.classList.remove('hidden');
-  card.innerHTML = `<h3><span>Suggestions</span><span class="src">Pl@ntNet</span></h3><p class="small muted">Comparing your photos…</p><div class="shimmer"></div><div class="shimmer" style="width:80%"></div><div class="shimmer" style="width:60%"></div>`;
+  const names = Object.entries(engines()).filter(([, on]) => on).map(([e]) => ENGINE_LABEL[e]).join(' and ');
+  card.innerHTML = `<h3><span>Suggestions</span></h3><p class="small muted" id="sgProgress">Asking ${esc(names)}…</p><div class="shimmer"></div><div class="shimmer" style="width:80%"></div><div class="shimmer" style="width:60%"></div>`;
   try {
     const images = [];
-    for (const id of form.photoIds.slice(0, 5)) {
+    for (const id of form.photoIds.slice(0, 4)) {
       const p = await db.get('photos', id);
-      if (p) images.push({ blob: p.blob, organ: 'auto' });
+      if (p) images.push({ blob: p.blob });
     }
-    const r = await identify(images, { detailed: true, results: 8 });
+    const r = await identifyAll(images, entryContext(), { onPartial: (e) => { const el = $('#sgProgress'); if (el) el.textContent = `${ENGINE_LABEL[e]} answered; checking names in GBIF…`; } });
     if (run !== form.suggestRun || !form.open) return;
     form.suggestions = r;
     form.changed();
@@ -1407,7 +1551,9 @@ async function runEntrySuggestions() {
     renderSuggestCard();
   } catch (err) {
     if (run !== form.suggestRun) return;
-    card.innerHTML = `<h3><span>Suggestions</span><span class="src">Pl@ntNet</span></h3><p class="small">${esc(err.message)}</p>`;
+    card.innerHTML = `<h3><span>Suggestions</span></h3><p class="small warn">${esc(err.message)}</p>${err.code === 'key' || err.code === 'nokey' ? '<p class="small"><a href="#/more?s=ident">Check the keys in Settings</a></p>' : ''}
+      <button type="button" class="btn btn-small btn-outline" id="sgRun">Try again</button>`;
+    $('#sgRun')?.addEventListener('click', runEntrySuggestions);
   }
 }
 
@@ -1422,7 +1568,7 @@ function applySuggestion(s) {
   haptic.select();
   form.changed();
   runLookup();
-  toast('Name filled from a suggestion, marked “probable”. Check it before saving.');
+  toast(s.gbif?.accepted ? `Filled. GBIF treats it as a synonym of ${s.gbif.accepted}; the lookup below offers the accepted name.` : 'Name filled from a suggestion, marked “probable”. Check it before saving.', { ms: 5000 });
   $('#fScientific').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
 }
 
@@ -1482,13 +1628,13 @@ function applyLookup(info) {
 }
 
 /* ----- open / close / save ----- */
-async function openForm({ entry = null, photos = [], fix = null, restore = null, focusName = false, fromCamera = false, selected = null, suggestions = null } = {}) {
+async function openForm({ entry = null, photos = [], fix = null, restore = null, focusName = false, fromCamera = false, selected = null, suggestions = null, source = '' } = {}) {
   if (camera.open) camera.close();
   form.isNew = !entry;
   form.entry = entry ? structuredClone(entry) : baseEntry();
   form.photoIds = [...(form.entry.photoIds || []), ...photos.map((p) => p.id)];
   form.originalPhotoIds = restore?.originalPhotoIds || [...(entry?.photoIds || [])];
-  form.auto = new Set(form.isNew ? ['date', 'time', 'locality'] : []);
+  form.auto = new Set(form.isNew ? ['date', 'time', 'locality', 'district'] : []);
   form.dirty = !!(photos.length || restore);
   form.suggestedFor = form.photoIds.join(',');   // don't auto-run for photos that already have suggestions
   form.fill(restore ? { ...form.entry, ...restore.values } : form.entry);
@@ -1496,7 +1642,7 @@ async function openForm({ entry = null, photos = [], fix = null, restore = null,
   if (suggestions?.length) form.suggestions = { species: suggestions, genera: [], families: [], stored: true };
   $('#formTitle').textContent = form.isNew ? 'New observation' : (entry.status === 'draft' ? 'Identify draft' : 'Edit observation');
   $('#deleteBtn').classList.toggle('hidden', form.isNew);
-  $('#gpsStatus').textContent = form.entry.accuracy != null && !form.isNew ? `Saved fix ±${form.entry.accuracy} m` : '';
+  form.renderLocSource();
   $('#suggestList').classList.add('hidden');
   await form.renderPhotos();
   $('#formSheet').classList.remove('hidden');
@@ -1509,11 +1655,17 @@ async function openForm({ entry = null, photos = [], fix = null, restore = null,
 
   if (form.isNew && !restore) {
     const exif = photos.find((p) => p.exif?.lat != null)?.exif;
-    if (fix) { form.applyFix(fix); $('#gpsStatus').textContent = `GPS fix ±${fix.accuracy} m (from camera)`; form.afterFix(fix); }
-    else if (exif) { await form.addPhoto(form.photoIds.pop(), exif); }
-    else form.locate();
     const exifDate = photos.find((p) => p.exif?.date)?.exif;
-    if (exifDate) { form.setAuto('date', exifDate.date); if (exifDate.time) form.setAuto('time', exifDate.time); }
+    const takenNow = fromCamera || source === 'camera';
+    form.dateSource = takenNow ? 'Device clock (photo taken now)' : 'Device clock';
+    if (fix) { form.applyFix(fix); form.locationSource = `Phone GPS ±${fix.accuracy} m (camera)`; form.renderLocSource(); form.afterFix(fix); }
+    else if (exif) { await form.addPhoto(form.photoIds.pop(), exif); }
+    else if (takenNow) form.locate();
+    // Photos added from the gallery (e.g. from a DSLR) were taken elsewhere and earlier: no phone
+    // GPS; the date comes from the photo metadata, or is left for the user to enter.
+    if (exifDate) form.applyPhotoDate(exifDate);
+    else if (source === 'gallery') { $('#fDate').value = ''; $('#fTime').value = ''; form.dateSource = 'No date in the photo metadata. Enter the date it was taken'; }
+    form.renderDateSource(); form.renderLocSource();
     if (selected) applySuggestion(selected);
     form.changed();
   }

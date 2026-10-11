@@ -2,7 +2,7 @@ name: Build Android app
 
 on:
   push:
-    branches: [main, v3]
+    branches: [main, v4]
     paths-ignore: ['**.md']
   workflow_dispatch:
 

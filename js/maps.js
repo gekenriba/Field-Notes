@@ -2,7 +2,8 @@
 /* global L */
 import { ContourLayer } from './contours.js';
 
-export const TAWANG = [27.586, 91.866];
+export const ARUNACHAL = [28.05, 94.3];
+export const ARUNACHAL_ZOOM = 7;
 
 // Leaflet.heat 0.2 keeps redrawing after its map is removed (pending animation frames, zoom
 // animations), which throws once the map's panes are gone. Guard those paths.
@@ -120,7 +121,7 @@ export function boundariesLayer(map, { onSatellite = true } = {}) {
 
 // Map with a small style switcher. Returns the Leaflet map; map.fnSetStyle(name) switches style.
 export function createMap(el, { style = 'Minimal', controls = true, contours, boundaries, onStyle } = {}) {
-  const map = L.map(el, { zoomControl: false, attributionControl: true, preferCanvas: true, zoomSnap: 0.5, maxZoom: 18 }).setView(TAWANG, 10);
+  const map = L.map(el, { zoomControl: false, attributionControl: true, preferCanvas: true, zoomSnap: 0.5, maxZoom: 18 }).setView(ARUNACHAL, ARUNACHAL_ZOOM);
   if (controls) L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
   map.attributionControl.setPrefix(false);
@@ -195,7 +196,7 @@ export function pointsLayer(entries, { onOpen, thumbs } = {}) {
 
 export function fitTo(map, entries, maxZoom = 13) {
   const pts = entries.filter((e) => e.lat != null && e.lng != null).map((e) => [e.lat, e.lng]);
-  if (!pts.length) { map.setView(TAWANG, 10); return; }
+  if (!pts.length) { map.setView(ARUNACHAL, ARUNACHAL_ZOOM); return; }
   if (pts.length === 1) { map.setView(pts[0], maxZoom, { animate: false }); return; }
   map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom, animate: false });
 }

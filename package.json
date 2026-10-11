@@ -1,8 +1,8 @@
 {
   "name": "field-notes",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
-  "description": "Field Notes: a field journal for botanists in the Eastern Himalaya. Developed by Geken.",
+  "description": "Field Notes: a field journal for documenting the flora of Arunachal Pradesh. Developed by Geken.",
   "scripts": {
     "build": "node scripts/build-web.mjs",
     "android": "npm run build && npx cap sync android"
@@ -10,6 +10,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
+    "@capacitor/clipboard": "^8.0.1",
     "@capacitor/core": "^8.5.3",
     "@capacitor/filesystem": "^8.1.4",
     "@capacitor/haptics": "^8.0.2",

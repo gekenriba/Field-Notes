@@ -170,12 +170,14 @@ def main():
         def hero():
             page.wait_for_function('document.querySelector(".hero-slide.on img") && document.querySelector(".hero-slide.on img").naturalWidth > 0', timeout=15000)
             time.sleep(1.5); shot('01b-home')
-            return page.text_content('#heroCredit')
-        check('Home photos and credits load', hero)
+            n = page.evaluate('document.querySelectorAll(".hero-slide").length')
+            if page.evaluate('!!document.querySelector("#heroCredit, .hero-credit")'): raise Exception('old photo credits still shown')
+            return f'{n} photos by Geken, no captions or credits'
+        check('Home photos load (no credits)', hero)
 
         def set_key():
             page.evaluate('location.hash = "#/more"'); page.wait_for_selector('#idKey')
-            page.evaluate('(() => { const i = document.querySelector("#idKey"); i.value = "fieldnotes-ci-invalid-key"; i.dispatchEvent(new Event("change")); })()')
+            page.evaluate('(() => { for (const [id, v] of [["#idKey", "fieldnotes-ci-invalid-key"], ["#gemKey", "fieldnotes-ci-invalid-key"]]) { const i = document.querySelector(id); i.value = v; i.dispatchEvent(new Event("change")); } })()')
             time.sleep(1); shot('01c-about')
             dev = page.text_content('.dev b')
             page.evaluate('location.hash = "#/home"'); page.wait_for_selector('.hero')
@@ -190,10 +192,11 @@ def main():
             return page.evaluate('[document.querySelector("#cameraVideo").videoWidth, document.querySelector("#cameraVideo").videoHeight]')
         check('In-app camera opens and takes a photo', camera)
 
-        def live():
-            info = page.evaluate('({callouts: [...document.querySelectorAll(".callout .lbl")].map(e => e.textContent), hint: document.querySelector("#camHint").textContent, chips: document.querySelector("#camSuggest").textContent.trim()})')
-            return f'callouts={info["callouts"]} hint="{info["hint"]}" suggestions="{info["chips"][:80]}" (emulator camera shows a synthetic scene)'
-        check('Live morphology scan runs on device', live)
+        def plain():
+            info = page.evaluate('({live: !document.querySelector("#camLive").classList.contains("hidden"), callouts: document.querySelectorAll(".callout").length})')
+            if info['live'] or info['callouts']: raise Exception(f'live pill={info["live"]}, callouts={info["callouts"]}')
+            return 'plain camera: no Live ID pill or callouts'
+        check('Camera is plain by default', plain)
 
         def to_form():
             page.click('#camDone'); page.wait_for_selector('#formSheet:not(.hidden)')
@@ -202,17 +205,29 @@ def main():
             return f'{n} photo in form'
         check('Photo carried into entry form', to_form)
 
-        def plantnet():
-            page.wait_for_function('document.querySelector("#suggestCard") && !document.querySelector("#suggestCard").classList.contains("hidden") && !/Comparing/.test(document.querySelector("#suggestCard").textContent)', timeout=40000)
-            t = page.text_content('#suggestCard')
-            if 'Could not reach' in t: raise Exception(t[:200])
-            return 'Pl@ntNet answered: ' + ' '.join(t.split())[:160]
-        check('Entry suggestions request reaches Pl@ntNet', plantnet)
-
         def gps():
             page.wait_for_function('document.querySelector("#fLat").value !== ""', timeout=45000)
             return f'lat {page.input_value("#fLat")}, lng {page.input_value("#fLng")}, alt {page.input_value("#fAlt")}, {page.text_content("#gpsStatus")}'
-        check('GPS fills coordinates', gps)
+        check('Phone GPS fills coordinates for camera photos', gps)
+
+        def engines():
+            page.wait_for_function('document.querySelector("#suggestCard") && !document.querySelector("#suggestCard").classList.contains("hidden") && !/Asking|checking/.test(document.querySelector("#suggestCard").textContent) && /Gemini|Pl@ntNet|Suggest/.test(document.querySelector("#suggestCard").textContent)', timeout=60000)
+            t = ' '.join(page.text_content('#suggestCard').split())
+            if 'Could not reach' in t: raise Exception(t[:300])
+            if 'Gemini' not in t or 'Pl@ntNet' not in t: raise Exception('expected answers from both servers: ' + t[:300])
+            return 'Both servers answered through native HTTP (test key rejected as expected): ' + t[:220]
+        check('Entry suggestions reach Gemini and Pl@ntNet', engines)
+
+        def maps_link():
+            page.evaluate('document.querySelector("#fMapsLink").scrollIntoView()')
+            page.fill('#fMapsLink', 'https://www.google.com/maps/place/27%C2%B030\'15.1%22N+92%C2%B006\'29.9%22E/@27.5042,92.1083,15z')
+            page.click('#mapsApply')
+            page.wait_for_function('document.querySelector("#fLat").value.startsWith("27.504")', timeout=15000)
+            page.wait_for_function('document.querySelector("#fDistrict").value !== ""', timeout=30000)
+            time.sleep(4); shot('03a-maps-link')
+            return f'lat {page.input_value("#fLat")}, lng {page.input_value("#fLng")}, alt {page.input_value("#fAlt")}, district {page.input_value("#fDistrict")}, locality {page.input_value("#fLocality")}'
+        check('Google Maps link fills location and district (live OSM)', maps_link)
+
 
         def lookup():
             page.fill('#fScientific', 'Rhododendron arboreum')
