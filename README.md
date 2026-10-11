@@ -19,7 +19,7 @@ Missing values are shown as *not reported* rather than guessed.
 
 ## Android app
 
-Download **[FieldNotes.apk](https://github.com/gekenriba/Field-Notes/releases/download/android-rebuild-local-first/FieldNotes.apk)** on your phone and open it. Android will ask you to allow installing from your browser/Files app the first time. Allow camera and location when the app asks.
+Download **[FieldNotes.apk](https://github.com/gekenriba/Field-Notes/releases/download/android-main/FieldNotes.apk)** on your phone and open it. Android will ask you to allow installing from your browser/Files app the first time. Allow camera and location when the app asks.
 
 - A new APK is built automatically by GitHub Actions on every push and attached to the release (`android-<branch>`). Newer builds install over older ones and keep your records.
 - Each build is also installed on an Android emulator that takes a photo, gets GPS, looks up a name, saves a record and a draft, restarts the app, opens the maps and exports a file. The results (`emulator-results.md`) and screenshots are attached to the same release.
