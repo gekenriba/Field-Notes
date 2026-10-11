@@ -40,15 +40,26 @@ time.sleep(12)
 adb('emu', 'geo', 'fix', '91.8594', '27.5861', '3900')
 shot('01-launch')
 
-sock = None
-for _ in range(20):
-    m = re.search(r'@(webview_devtools_remote_\d+)', adb('shell', 'cat', '/proc/net/unix'))
-    if m:
-        sock = m.group(1); break
-    time.sleep(2)
-if not sock:
-    print(adb('logcat', '-d', '-t', '300')); sys.exit('WebView DevTools socket not found')
-adb('forward', 'tcp:9222', f'localabstract:{sock}', check=True)
+def forward_devtools():
+    # /proc/net/unix is not readable on Android 10+, so derive the socket name from the pid.
+    for _ in range(30):
+        pid = adb('shell', 'pidof', PKG).strip()
+        if pid:
+            adb('forward', '--remove-all')
+            r = subprocess.run(['adb', 'forward', 'tcp:9222', f'localabstract:webview_devtools_remote_{pid}'], capture_output=True, text=True)
+            try:
+                import urllib.request
+                info = urllib.request.urlopen('http://127.0.0.1:9222/json/version', timeout=3).read().decode()
+                print('DevTools:', info[:200], flush=True)
+                return
+            except Exception as e:
+                print('waiting for DevTools', pid, r.stderr.strip(), e, flush=True)
+        time.sleep(2)
+    with open(f'{OUT}/results.md', 'w') as f:
+        f.write('WebView DevTools not reachable\n\n```\n' + adb('logcat', '-d', '-t', '400') + '\n```\n')
+    sys.exit('WebView DevTools not reachable')
+
+forward_devtools()
 
 with sync_playwright() as p:
     browser = p.chromium.connect_over_cdp('http://127.0.0.1:9222')
@@ -124,8 +135,7 @@ with sync_playwright() as p:
     try: browser.close()
     except Exception: pass
     time.sleep(3)
-    m = re.search(r'@(webview_devtools_remote_\d+)', adb('shell', 'cat', '/proc/net/unix'))
-    adb('forward', '--remove-all'); adb('forward', 'tcp:9222', f'localabstract:{m.group(1)}')
+    forward_devtools()
     browser = p.chromium.connect_over_cdp('http://127.0.0.1:9222')
     page = browser.contexts[0].pages[0]
     page.set_default_timeout(25000)
