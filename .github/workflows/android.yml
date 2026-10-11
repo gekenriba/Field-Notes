@@ -127,4 +127,5 @@ jobs:
           cd test-out 2>/dev/null || exit 0
           for f in *.png; do mv "$f" "emulator-$f"; done
           mv results.md emulator-results.md 2>/dev/null || true
+          mv log.txt emulator-log.txt 2>/dev/null || true
           gh release upload "$TAG" emulator-* --clobber
