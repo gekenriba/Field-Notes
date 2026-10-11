@@ -138,7 +138,9 @@ def main():
 
     def forward_devtools():
         # /proc/net/unix is not readable on Android 10+, so derive the socket name from the pid.
-        for _ in range(30):
+        for attempt in range(90):
+            if attempt in (30, 60):   # slow emulator: launch the activity again
+                adb('shell', 'am', 'start', '-n', f'{PKG}/.MainActivity')
             pid = adb('shell', 'pidof', PKG).strip()
             if pid:
                 adb('forward', '--remove-all')
@@ -221,7 +223,7 @@ def main():
 
         def persists():
             adb('shell', 'am', 'force-stop', PKG); time.sleep(2)
-            adb('shell', 'am', 'start', '-n', f'{PKG}/.MainActivity'); time.sleep(10)
+            adb('shell', 'am', 'start', '-W', '-n', f'{PKG}/.MainActivity'); time.sleep(12)
             return 'restarted'
         check('Force-stop and relaunch', persists)
 
