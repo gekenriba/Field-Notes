@@ -1,237 +1,214 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#12372a" />
-  <meta name="description" content="Field Notes is a mobile-first research field documentation PWA for Tawang District, Arunachal Pradesh." />
+  <meta name="theme-color" content="#14332a" />
+  <meta name="description" content="Field Notes — offline field journal for botanical observations in Tawang District, Arunachal Pradesh." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Field Notes</title>
-
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="preconnect" href="https://unpkg.com" />
-  <link rel="preconnect" href="https://www.gstatic.com" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <link rel="stylesheet" href="style.css" />
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="supabase-config.js"></script>
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
-  <div id="appShell" class="app-shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Tawang District Research App · Cloud Sync</p>
-        <h1>Field Notes</h1>
-      </div>
-      <button id="authButton" class="icon-button auth-button" type="button" aria-label="Sign in with Google">
-        <span id="authInitial">G</span>
-      </button>
-    </header>
+  <header class="topbar">
+    <a href="#/home" class="brand" aria-label="Field Notes home">
+      <span class="brand-mark" aria-hidden="true">✿</span>
+      <span>Field Notes</span>
+    </a>
+    <div class="topbar-right">
+      <span id="netStatus" class="net-pill" title="Network status">…</span>
+      <a href="#/more" class="icon-btn" aria-label="Backup and settings">⋯</a>
+    </div>
+  </header>
 
-    <main>
-      <section id="dashboardView" class="view is-active" aria-labelledby="dashboardTitle">
-        <div class="hero-card">
-          <div class="hero-copy">
-            <p class="eyebrow">Field documentation system</p>
-            <h2 id="dashboardTitle">Capture observations, photos, GPS and altitude with Supabase database sync.</h2>
-            <p>Local-first research database with online sync for plants, herbarium work, ethnobotany, fungi, field activities, and daily research notes.</p>
-          </div>
-          <div class="sync-panel">
-            <span id="onlineStatus" class="status-pill">Checking network…</span>
-            <button id="syncNowButton" class="secondary-button" type="button">Sync database</button>
-            <button id="driveBackupButton" class="secondary-button" type="button">Export backup</button>
-            <button id="importBackupButton" class="secondary-button" type="button">Import backup</button>
-          </div>
-        </div>
-
-        <section class="map-card" aria-label="Field collection map">
-          <div class="section-title-row">
-            <div>
-              <p class="eyebrow">Satellite map</p>
-              <h2>Collection map and heatmap</h2>
-            </div>
-            <button id="fitMapButton" class="small-button" type="button">Fit points</button>
-          </div>
-          <div id="map" class="map"></div>
-          <div id="mapFilters" class="chip-row" aria-label="Map filters"></div>
-        </section>
-
-        <section class="section-grid" aria-label="Research databases" id="sectionGrid"></section>
-
-        <section class="report-card">
-          <div>
-            <p class="eyebrow">Monthly reports</p>
-            <h2>Generate professional PDF reports</h2>
-            <p>Summarise section-wise counts, key observations, photos, maps, notes and ethnobotanical tables.</p>
-          </div>
-          <button id="openReportButton" class="primary-button" type="button">Generate report</button>
-        </section>
-      </section>
-
-      <section id="listView" class="view" aria-labelledby="listTitle">
-        <div class="page-header">
-          <button id="backToDashboard" class="icon-button" type="button" aria-label="Back to dashboard">←</button>
-          <div>
-            <p class="eyebrow">Database</p>
-            <h2 id="listTitle">Plants</h2>
-          </div>
-          <button id="addEntryButton" class="primary-button compact" type="button">Add</button>
-        </div>
-
-        <div class="toolbar">
-          <label class="search-box">
-            <span>Search</span>
-            <input id="searchInput" type="search" placeholder="Search notes, tags, location…" />
-          </label>
-          <label class="search-box small-field">
-            <span>Filter tag</span>
-            <input id="tagFilterInput" type="search" placeholder="e.g. alpine" />
-          </label>
-        </div>
-
-        <div id="entriesList" class="entries-list"></div>
-        <button id="floatingCamera" class="floating-camera" type="button" aria-label="Open camera">📷</button>
-      </section>
-    </main>
-
-    <nav class="bottom-nav" aria-label="Primary navigation">
-      <button class="nav-item is-active" type="button" data-nav="dashboard">⌂<span>Home</span></button>
-      <button class="nav-item" type="button" data-nav="map">◎<span>Map</span></button>
-      <button class="nav-item" type="button" data-nav="report">▣<span>Report</span></button>
-      <button class="nav-item" type="button" data-nav="sync">⇄<span>Sync</span></button>
-    </nav>
+  <div id="restoreBanner" class="banner hidden">
+    <span>You have an unsaved entry from earlier.</span>
+    <button id="restoreYes" class="btn btn-small btn-primary" type="button">Restore</button>
+    <button id="restoreNo" class="btn btn-small btn-ghost" type="button">Discard</button>
   </div>
 
-  <dialog id="entryDialog" class="modal">
-    <form id="entryForm" class="modal-card">
-      <div class="modal-header">
-        <div>
-          <p class="eyebrow" id="formSectionLabel">Plants</p>
-          <h2 id="formTitle">New Entry</h2>
+  <main id="view" tabindex="-1"></main>
+
+  <nav class="tabbar" aria-label="Main">
+    <a href="#/home" data-tab="home"><span aria-hidden="true">⌂</span>Home</a>
+    <a href="#/records" data-tab="records"><span aria-hidden="true">☰</span>Records<b id="draftBadge" class="badge hidden"></b></a>
+    <button id="cameraFab" class="fab" type="button" aria-label="New observation with camera">
+      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+    </button>
+    <a href="#/map" data-tab="map"><span aria-hidden="true">◎</span>Map</a>
+    <a href="#/species" data-tab="species"><span aria-hidden="true">❦</span>Species</a>
+  </nav>
+
+  <!-- Live camera -->
+  <section id="cameraSheet" class="camera hidden" aria-label="Camera">
+    <video id="cameraVideo" playsinline muted autoplay></video>
+    <div class="camera-top">
+      <button id="camClose" class="cam-btn" type="button" aria-label="Close camera">✕</button>
+      <span id="camGps" class="cam-gps">Locating…</span>
+      <button id="camTorch" class="cam-btn hidden" type="button" aria-label="Toggle flashlight">ϟ</button>
+    </div>
+    <div id="camStrip" class="cam-strip"></div>
+    <div class="camera-bottom">
+      <button id="camGallery" class="cam-btn" type="button" aria-label="Choose from gallery">▦</button>
+      <button id="camShutter" class="shutter" type="button" aria-label="Take photo"></button>
+      <button id="camFlip" class="cam-btn" type="button" aria-label="Switch camera">⟲</button>
+    </div>
+    <div class="camera-actions">
+      <button id="camQuickDraft" class="btn btn-ghost-light" type="button" disabled>Quick save as draft</button>
+      <button id="camDone" class="btn btn-primary" type="button" disabled>Next: details →</button>
+    </div>
+    <p id="camError" class="cam-error hidden"></p>
+  </section>
+
+  <input id="nativeCamInput" type="file" accept="image/*" capture="environment" class="visually-hidden" tabindex="-1" />
+  <input id="galleryInput" type="file" accept="image/*" multiple class="visually-hidden" tabindex="-1" />
+  <input id="importInput" type="file" accept="application/json,.json" class="visually-hidden" tabindex="-1" />
+
+  <!-- Entry form -->
+  <section id="formSheet" class="sheet hidden" aria-labelledby="formTitle">
+    <form id="entryForm" novalidate>
+      <div class="sheet-head">
+        <button type="button" class="icon-btn" id="formClose" aria-label="Close">✕</button>
+        <h2 id="formTitle">New observation</h2>
+        <button type="submit" class="btn btn-small btn-primary" data-save="auto">Save</button>
+      </div>
+
+      <div class="sheet-body">
+        <div id="formPhotos" class="photo-strip"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-outline" id="formCamera">📷 Camera</button>
+          <button type="button" class="btn btn-outline" id="formGallery">🖼 Gallery</button>
         </div>
-        <button class="icon-button" value="cancel" type="button" data-close-dialog>×</button>
-      </div>
 
-      <div class="form-grid">
-        <label>
-          <span>Entry title</span>
-          <input id="entryTitle" name="title" type="text" placeholder="e.g. Aconitum observation near trail" />
-        </label>
-        <label>
-          <span>Location name</span>
-          <input id="entryLocation" name="locationName" type="text" placeholder="Auto from GPS / edit manually" />
-        </label>
-        <label>
-          <span>Date</span>
-          <input id="entryDate" name="date" type="date" />
-        </label>
-        <label>
-          <span>Time</span>
-          <input id="entryTime" name="time" type="time" />
-        </label>
-        <label>
-          <span>Latitude</span>
-          <input id="entryLat" name="latitude" type="number" step="any" placeholder="27.586" />
-        </label>
-        <label>
-          <span>Longitude</span>
-          <input id="entryLng" name="longitude" type="number" step="any" placeholder="91.865" />
-        </label>
-        <label>
-          <span>Altitude (m)</span>
-          <input id="entryAltitude" name="altitude" type="number" step="any" placeholder="3000" />
-        </label>
-        <label>
-          <span>Tags</span>
-          <input id="entryTags" name="tags" type="text" placeholder="medicinal, alpine, phenology" />
-        </label>
-      </div>
+        <fieldset class="card">
+          <legend>Identification</legend>
+          <div class="seg" id="groupSeg" role="radiogroup" aria-label="Organism group"></div>
 
-      <div id="ethnoFields" class="ethno-fields hidden" aria-label="Ethnobotanical records form">
-        <div class="section-title-row tight">
-          <div>
-            <p class="eyebrow">Structured form</p>
-            <h3>Ethnobotanical record</h3>
+          <label class="field">
+            <span>Scientific name</span>
+            <div class="taxon-input">
+              <input id="fScientific" name="scientificName" autocomplete="off" spellcheck="false" placeholder="Start typing — e.g. Rhododendron, Meconopsis…" />
+              <button type="button" id="lookupBtn" class="btn btn-small btn-outline">Look up</button>
+            </div>
+            <ul id="suggestList" class="suggest hidden" role="listbox"></ul>
+          </label>
+          <div id="lookupPanel" class="lookup hidden" aria-live="polite"></div>
+
+          <div class="grid-2">
+            <label class="field"><span>Family</span><input id="fFamily" name="family" /></label>
+            <label class="field"><span>Genus</span><input id="fGenus" name="genus" /></label>
+            <label class="field"><span>Common name</span><input id="fCommon" name="commonName" /></label>
+            <label class="field"><span>Local name</span><input id="fLocal" name="localName" placeholder="Monpa / local" /></label>
           </div>
-        </div>
-        <div class="form-grid">
-          <label><span>Plant local name</span><input id="ethnoLocalName" type="text" /></label>
-          <label><span>Scientific name</span><input id="ethnoScientificName" type="text" /></label>
-          <label><span>Family</span><input id="ethnoFamily" type="text" /></label>
-          <label><span>Use case</span><input id="ethnoUseCase" type="text" /></label>
-          <label><span>Plant part used</span><input id="ethnoPartUsed" type="text" placeholder="Root, leaf, rhizome…" /></label>
-          <label><span>Method of preparation</span><input id="ethnoPreparation" type="text" /></label>
-          <label><span>Informant name</span><input id="ethnoInformantName" type="text" /></label>
-          <label><span>Informant age</span><input id="ethnoInformantAge" type="number" min="0" /></label>
-          <label><span>Informant gender</span>
-            <select id="ethnoInformantGender">
-              <option value="">Select</option>
-              <option>Female</option>
-              <option>Male</option>
-              <option>Other</option>
-              <option>Prefer not to say</option>
+          <div class="grid-2">
+            <label class="field"><span>ID confidence</span>
+              <select id="fConfidence" name="idConfidence">
+                <option value="certain">Certain</option>
+                <option value="probable">Probable</option>
+                <option value="tentative">Tentative (cf.)</option>
+              </select>
+            </label>
+            <label class="field"><span>Field label</span><input id="fLabel" name="fieldLabel" placeholder="e.g. Pedicularis sp. 3 (yellow)" /></label>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="fDraft" />
+            <span><strong>Keep as draft</strong> — not identified yet, I’ll update it later</span>
+          </label>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Where &amp; when</legend>
+          <div class="gps-row">
+            <button type="button" id="gpsBtn" class="btn btn-outline">◎ Get GPS</button>
+            <span id="gpsStatus" class="muted small"></span>
+          </div>
+          <div class="grid-2">
+            <label class="field"><span>Latitude</span><input id="fLat" name="lat" type="number" step="any" inputmode="decimal" /></label>
+            <label class="field"><span>Longitude</span><input id="fLng" name="lng" type="number" step="any" inputmode="decimal" /></label>
+            <label class="field"><span>Altitude (m)</span><input id="fAlt" name="altitude" type="number" step="1" inputmode="numeric" /></label>
+            <label class="field"><span>GPS accuracy (± m)</span><input id="fAcc" name="accuracy" type="number" step="1" inputmode="numeric" /></label>
+            <label class="field"><span>Date</span><input id="fDate" name="date" type="date" /></label>
+            <label class="field"><span>Time</span><input id="fTime" name="time" type="time" /></label>
+          </div>
+          <p id="altSource" class="muted small"></p>
+          <label class="field"><span>Locality</span><input id="fLocality" name="locality" placeholder="e.g. Bumla pass, near army post" /></label>
+          <label class="field"><span>Habitat</span><input id="fHabitat" name="habitat" placeholder="e.g. alpine meadow, rocky slope, Abies forest edge" /></label>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Observation</legend>
+          <span class="field-label">Phenology</span>
+          <div class="chips" id="phenoChips"></div>
+          <label class="field"><span>Abundance</span>
+            <select id="fAbundance" name="abundance">
+              <option value="">not recorded</option>
+              <option>Single individual</option><option>Rare</option><option>Occasional</option>
+              <option>Frequent</option><option>Abundant</option><option>Dominant</option>
             </select>
           </label>
-          <label><span>Community / tribe</span><input id="ethnoCommunity" type="text" placeholder="Monpa, Brokpa…" /></label>
-          <label><span>Consent obtained</span>
-            <select id="ethnoConsent">
-              <option value="">Select</option>
-              <option value="Yes">Yes</option>
-              <option value="No">No</option>
-            </select>
+          <label class="field"><span>Notes</span>
+            <textarea id="fNotes" name="notes" rows="4" placeholder="Height, flower colour, associated species, soil, slope, aspect…"></textarea>
           </label>
+          <label class="field"><span>Tags</span><input id="fTags" name="tags" placeholder="medicinal, alpine, new record" /></label>
+        </fieldset>
+
+        <details class="card" id="voucherBox">
+          <summary>Herbarium voucher</summary>
+          <div class="grid-2">
+            <label class="field"><span>Collector</span><input id="fCollector" name="collector" /></label>
+            <label class="field"><span>Collection no.</span><input id="fCollNo" name="collectionNumber" /></label>
+            <label class="field"><span>Herbarium</span><input id="fHerbarium" name="herbarium" placeholder="e.g. ARUN, ASSAM" /></label>
+          </div>
+        </details>
+
+        <details class="card" id="ethnoBox">
+          <summary>Ethnobotany</summary>
+          <div class="grid-2">
+            <label class="field"><span>Use</span><input id="eUse" /></label>
+            <label class="field"><span>Part used</span><input id="ePart" placeholder="root, leaf, rhizome…" /></label>
+            <label class="field"><span>Preparation</span><input id="ePrep" /></label>
+            <label class="field"><span>Community</span><input id="eCommunity" placeholder="Monpa, Brokpa…" /></label>
+            <label class="field"><span>Informant</span><input id="eInformant" /></label>
+            <label class="field"><span>Informant age</span><input id="eAge" type="number" min="0" /></label>
+            <label class="field"><span>Informant gender</span>
+              <select id="eGender"><option value="">—</option><option>Female</option><option>Male</option><option>Other</option><option>Prefer not to say</option></select>
+            </label>
+            <label class="field"><span>Prior informed consent</span>
+              <select id="eConsent"><option value="">—</option><option>Yes</option><option>No</option></select>
+            </label>
+          </div>
+        </details>
+
+        <div class="form-foot">
+          <button type="button" id="deleteBtn" class="btn btn-danger hidden">Delete</button>
+          <span class="spacer"></span>
+          <button type="submit" class="btn btn-outline" data-save="draft">Save as draft</button>
+          <button type="submit" class="btn btn-primary" data-save="auto">Save</button>
         </div>
       </div>
+    </form>
+  </section>
 
-      <label>
-        <span>Notes</span>
-        <textarea id="entryNotes" name="notes" rows="5" placeholder="Observation, habitat, abundance, associated species, phenology, informant details…"></textarea>
-      </label>
-
-      <div class="photo-actions">
-        <button id="capturePhotoButton" class="secondary-button" type="button">Take photo</button>
-        <button id="uploadPhotoButton" class="secondary-button" type="button">Upload photo</button>
-        <button id="useGpsButton" class="secondary-button" type="button">Use GPS</button>
-        <input id="galleryInput" type="file" accept="image/*" multiple hidden />
-      </div>
-      <div id="photoPreview" class="photo-preview"></div>
-
-      <div class="modal-actions">
-        <button id="deleteEntryButton" class="danger-button hidden" type="button">Delete</button>
-        <button class="secondary-button" type="button" data-close-dialog>Cancel</button>
-        <button id="saveEntryButton" class="primary-button" type="submit">Save entry</button>
+  <dialog id="confirmDialog" class="confirm">
+    <form method="dialog">
+      <p id="confirmText"></p>
+      <div class="row-actions end">
+        <button value="no" class="btn btn-ghost">Cancel</button>
+        <button value="yes" class="btn btn-danger" id="confirmYes">Delete</button>
       </div>
     </form>
   </dialog>
 
-  <dialog id="reportDialog" class="modal">
-    <form method="dialog" class="modal-card report-modal">
-      <div class="modal-header">
-        <div>
-          <p class="eyebrow">Monthly report generator</p>
-          <h2>Field Notes Report</h2>
-        </div>
-        <button class="icon-button" value="cancel" type="button" data-close-dialog>×</button>
-      </div>
-      <div class="form-grid">
-        <label><span>Month</span><input id="reportMonth" type="month" /></label>
-        <label><span>Important observations</span><input id="reportHighlights" type="text" placeholder="Separate points using semicolon ;" /></label>
-      </div>
-      <div id="reportPreview" class="report-preview"></div>
-      <div class="modal-actions">
-        <button class="secondary-button" type="button" data-close-dialog>Cancel</button>
-        <button id="previewReportButton" class="secondary-button" type="button">Preview</button>
-        <button id="exportPdfButton" class="primary-button" type="button">Export PDF</button>
-      </div>
-    </form>
-  </dialog>
-
+  <div id="viewer" class="viewer hidden" role="dialog" aria-label="Photo"><img alt="" /></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script type="module" src="script.js"></script>
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/leaflet-heat.js"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

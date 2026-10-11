@@ -1,0 +1,131 @@
+name: Build Android app
+
+on:
+  push:
+    branches: [main, rebuild-local-first]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04   # image ships with the Android SDK
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Show Android SDK
+        run: echo "ANDROID_HOME=${ANDROID_HOME:-unset}"; ls "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/platforms "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools
+
+      - name: Install and copy web app into the Android project
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - name: Build signed APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk ../dist/FieldNotes.apk
+          BT=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs ../dist/FieldNotes.apk | head -3
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: FieldNotes-apk
+          path: dist/FieldNotes.apk
+
+      # A fixed release tag per branch gives a stable download link for the phone.
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="android-${GITHUB_REF_NAME//\//-}"
+          NOTES="Field Notes Android app, build ${{ github.run_number }} from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}. Download FieldNotes.apk on your phone and open it to install."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/FieldNotes.apk --clobber
+            gh release edit "$TAG" --title "Field Notes for Android (build ${{ github.run_number }})" --notes "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "$TAG" dist/FieldNotes.apk --title "Field Notes for Android (build ${{ github.run_number }})" --notes "$NOTES" --target "$GITHUB_SHA" --prerelease
+          fi
+
+  # Installs the app on an Android emulator and drives camera, GPS, save, drafts, maps and
+  # export through the real WebView. Screenshots and a results table are attached to the release.
+  emulator-test:
+    needs: apk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Build debug APK (WebView inspectable for the test)
+        run: |
+          npm ci
+          npm run build
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('capacitor.config.json'));c.android.webContentsDebuggingEnabled=true;fs.writeFileSync('capacitor.config.json',JSON.stringify(c,null,2))"
+          npx cap sync android
+          cd android && chmod +x gradlew && ./gradlew --no-daemon assembleDebug
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - run: pip install websocket-client
+
+      - name: Run app on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated -camera-front emulated
+          script: python3 scripts/emulator_test.py android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Attach screenshots and results to the release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="android-${GITHUB_REF_NAME//\//-}"
+          cd test-out 2>/dev/null || exit 0
+          for f in *.png; do mv "$f" "emulator-$f"; done
+          mv results.md emulator-results.md 2>/dev/null || true
+          mv log.txt emulator-log.txt 2>/dev/null || true
+          gh release upload "$TAG" emulator-* --clobber

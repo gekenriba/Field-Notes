@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Field Notes</string>
+    <string name="title_activity_main">Field Notes</string>
+    <string name="package_name">in.tawang.fieldnotes</string>
+    <string name="custom_url_scheme">in.tawang.fieldnotes</string>
+</resources>
