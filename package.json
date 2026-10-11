@@ -1,8 +1,8 @@
 {
   "name": "field-notes",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "Offline field journal for botanical observations in Tawang District",
+  "description": "Field Notes: a field journal for botanists in the Eastern Himalaya. Developed by Geken.",
   "scripts": {
     "build": "node scripts/build-web.mjs",
     "android": "npm run build && npx cap sync android"
@@ -12,7 +12,9 @@
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",
     "@capacitor/filesystem": "^8.1.4",
-    "@capacitor/share": "^8.0.3"
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/share": "^8.0.3",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3"
