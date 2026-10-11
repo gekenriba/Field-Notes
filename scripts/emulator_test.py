@@ -171,7 +171,7 @@ def main():
             page.wait_for_function('document.querySelector(".hero-slide.on img") && document.querySelector(".hero-slide.on img").naturalWidth > 0', timeout=15000)
             time.sleep(1.5); shot('01b-home')
             n = page.evaluate('document.querySelectorAll(".hero-slide").length')
-            if page.query_selector('#heroCredit, .hero-credit'): raise Exception('old photo credits still shown')
+            if page.evaluate('!!document.querySelector("#heroCredit, .hero-credit")'): raise Exception('old photo credits still shown')
             return f'{n} photos by Geken, no captions or credits'
         check('Home photos load (no credits)', hero)
 
