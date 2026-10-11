@@ -6,7 +6,92 @@ species pages, and triggers an export to the Android share sheet. Screenshots of
 screen are written to test-out/.
 """
 import json, os, re, subprocess, sys, time
-from playwright.sync_api import sync_playwright
+import urllib.request
+import websocket  # pip install websocket-client
+
+
+class CdpPage:
+    """Minimal Chrome DevTools Protocol client for an Android WebView page.
+    (Playwright's connect_over_cdp needs browser-context APIs that WebView lacks.)"""
+
+    def __init__(self, port=9222):
+        targets = json.loads(urllib.request.urlopen(f'http://127.0.0.1:{port}/json', timeout=5).read())
+        page = next(t for t in targets if t.get('type') == 'page')
+        self.ws = websocket.create_connection(page['webSocketDebuggerUrl'], timeout=60, suppress_origin=True)
+        self.n = 0
+        self.timeout = 25
+        self.handlers = []
+        self.send('Runtime.enable')
+
+    def on(self, kind, fn):
+        self.handlers.append((kind, fn))
+
+    def _event(self, msg):
+        m, prm = msg.get('method'), msg.get('params', {})
+        if m == 'Runtime.exceptionThrown':
+            d = prm['exceptionDetails']
+            text = d.get('exception', {}).get('description') or d.get('text')
+            for k, fn in self.handlers:
+                if k == 'pageerror': fn(text)
+        elif m == 'Runtime.consoleAPICalled':
+            text = ' '.join(str(a.get('value', a.get('description', ''))) for a in prm.get('args', []))
+            for k, fn in self.handlers:
+                if k == 'console': fn(type('M', (), {'type': prm.get('type'), 'text': text})())
+
+    def send(self, method, params=None):
+        self.n += 1
+        mid = self.n
+        self.ws.send(json.dumps({'id': mid, 'method': method, 'params': params or {}}))
+        while True:
+            msg = json.loads(self.ws.recv())
+            if msg.get('id') == mid:
+                if 'error' in msg: raise Exception(msg['error'].get('message'))
+                return msg.get('result', {})
+            self._event(msg)
+
+    def evaluate(self, expr):
+        r = self.send('Runtime.evaluate', {'expression': expr, 'awaitPromise': True, 'returnByValue': True, 'userGesture': True})
+        if 'exceptionDetails' in r:
+            raise Exception(r['exceptionDetails'].get('exception', {}).get('description') or r['exceptionDetails'].get('text'))
+        return r.get('result', {}).get('value')
+
+    def wait_for_function(self, expr, timeout=None):
+        end = time.time() + (timeout / 1000 if timeout else self.timeout)
+        while time.time() < end:
+            try:
+                if self.evaluate(f'!!({expr})'): return True
+            except Exception:
+                pass
+            time.sleep(0.4)
+        raise Exception(f'timed out waiting for: {expr[:120]}')
+
+    def wait_for_selector(self, sel, timeout=None):
+        return self.wait_for_function(f'document.querySelector({json.dumps(sel)})', timeout)
+
+    def click(self, sel):
+        self.wait_for_selector(sel)
+        self.evaluate(f'document.querySelector({json.dumps(sel)}).click()')
+
+    def fill(self, sel, value):
+        self.wait_for_selector(sel)
+        self.evaluate(f'(() => {{ const e = document.querySelector({json.dumps(sel)}); e.focus(); e.value = {json.dumps(value)}; e.dispatchEvent(new Event("input", {{bubbles: true}})); }})()')
+
+    def input_value(self, sel):
+        return self.evaluate(f'document.querySelector({json.dumps(sel)}).value')
+
+    def text_content(self, sel):
+        return self.evaluate(f'document.querySelector({json.dumps(sel)}).textContent')
+
+    def locator(self, sel):
+        page = self
+        return type('L', (), {'count': lambda _: page.evaluate(f'document.querySelectorAll({json.dumps(sel)}).length')})()
+
+    def set_default_timeout(self, ms):
+        self.timeout = ms / 1000
+
+    def close(self):
+        try: self.ws.close()
+        except Exception: pass
 
 OUT = 'test-out'
 os.makedirs(OUT, exist_ok=True)
@@ -67,10 +152,8 @@ def main():
 
     forward_devtools()
 
-    with sync_playwright() as p:
-        browser = p.chromium.connect_over_cdp('http://127.0.0.1:9222')
-        page = browser.contexts[0].pages[0]
-        page.set_default_timeout(25000)
+    if True:
+        page = CdpPage()
         logs = []
         page.on('console', lambda m: logs.append(f'{m.type}: {m.text}'))
         page.on('pageerror', lambda e: logs.append(f'pageerror: {e}'))
@@ -138,13 +221,12 @@ def main():
         check('Force-stop and relaunch', persists)
 
         # Reconnect after relaunch
-        try: browser.close()
-        except Exception: pass
+        page.close()
         time.sleep(3)
         forward_devtools()
-        browser = p.chromium.connect_over_cdp('http://127.0.0.1:9222')
-        page = browser.contexts[0].pages[0]
-        page.set_default_timeout(25000)
+        page = CdpPage()
+        page.on('console', lambda m: logs.append(f'{m.type}: {m.text}'))
+        page.on('pageerror', lambda e: logs.append(f'pageerror: {e}'))
 
         def after_restart():
             page.wait_for_selector('.hero')

@@ -106,7 +106,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - run: pip install playwright
+      - run: pip install websocket-client
 
       - name: Run app on emulator
         uses: reactivecircus/android-emulator-runner@v2
