@@ -762,7 +762,7 @@ async function renderMore(view, _a, params) {
 
     <section class="card" id="creditsCard">
       <h3>Sources and credits</h3>
-      <p class="small">Names and details: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Pl@ntNet. Elevation and contours: AWS Terrain Tiles (SRTM and others) and Copernicus DEM via Open-Meteo. Maps: CARTO, OpenStreetMap contributors, OpenTopoMap, Esri World Imagery. Boundaries: DataMeet (CC BY 4.0; district boundaries as of Census 2011, so districts created later are not shown).</p>
+      <p class="small">Names and details: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Pl@ntNet. Elevation and contours: AWS Terrain Tiles (SRTM and others) and Copernicus DEM via Open-Meteo. Maps: Esri (light grey canvas and World Imagery), OpenStreetMap contributors, OpenTopoMap. Boundaries: DataMeet (CC BY 4.0; district boundaries as of Census 2011, so districts created later are not shown).</p>
       <p class="small"><b>Home screen photos</b> (Wikimedia Commons):</p>
       <ul class="credits">${cr.map((c) => `<li><em>${esc(c.species)}</em>: ${esc(c.artist)}, <a href="${esc(c.licenseUrl || c.source)}" target="_blank" rel="noopener">${esc(c.license)}</a>, <a href="${esc(c.source)}" target="_blank" rel="noopener">source</a></li>`).join('')}</ul>
     </section>`;
@@ -979,7 +979,11 @@ const camera = {
         el.style.width = `${x1 - x0 + padPx * 2}px`; el.style.height = `${y1 - y0 + padPx * 2}px`;
         const many = (t.n || 1) >= 3;
         const col = t.colour || '';
-        el.querySelector('.lbl').innerHTML = `<i style="background:${swatch(col)}"></i>${esc(cap(col))} ${many ? 'inflorescence' : 'flower'}`;
+        const lbl = el.querySelector('.lbl');
+        lbl.innerHTML = `<i style="background:${swatch(col)}"></i>${esc(cap(col))} ${many ? 'inflorescence' : 'flower'}`;
+        // Keep the label on screen near the right edge.
+        const room = video.clientWidth - (x0 - padPx) - lbl.offsetWidth - 10;
+        lbl.style.left = `${Math.min(0, room)}px`;
       }
       el.style.transition = 'transform .24s linear, width .24s linear, height .24s linear, opacity .35s ease';
     }

@@ -177,8 +177,9 @@ def main():
             page.evaluate('location.hash = "#/more"'); page.wait_for_selector('#idKey')
             page.evaluate('(() => { const i = document.querySelector("#idKey"); i.value = "fieldnotes-ci-invalid-key"; i.dispatchEvent(new Event("change")); })()')
             time.sleep(1); shot('01c-about')
+            dev = page.text_content('.dev b')
             page.evaluate('location.hash = "#/home"'); page.wait_for_selector('.hero')
-            return page.text_content('.dev b')
+            return dev
         check('About shows developer; test key set', set_key)
 
         def camera():

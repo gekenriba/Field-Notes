@@ -66,7 +66,7 @@ const CachedTileLayer = L.TileLayer.extend({
 });
 const tileLayer = (url, opts) => new CachedTileLayer(url, opts);
 
-const CARTO = 'Map © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>, data © OpenStreetMap contributors';
+const ESRI_GRAY = 'Base map © Esri, HERE, Garmin, © OpenStreetMap contributors';
 
 // Three base styles. "Minimal" is a quiet grey base with contour lines and soft relief on top.
 export const STYLES = {
@@ -80,8 +80,9 @@ function baseTiles(style) {
     maxZoom: 19, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' });
   if (style === 'Topo') return tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
     maxZoom: 17, attribution: 'Map data © OpenStreetMap contributors, SRTM | Style © OpenTopoMap (CC-BY-SA)' });
-  return tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19, subdomains: 'abcd', attribution: CARTO, className: 'tiles-minimal' });
+  // Esri light grey canvas: quiet, no key needed (CARTO now watermarks requests from apps).
+  return tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    maxNativeZoom: 16, maxZoom: 19, attribution: ESRI_GRAY, className: 'tiles-minimal' });
 }
 
 // ---- Administrative boundaries (DataMeet, CC BY 4.0 / CC BY 2.5 IN) ----
@@ -119,7 +120,7 @@ export function boundariesLayer(map, { onSatellite = true } = {}) {
 
 // Map with a small style switcher. Returns the Leaflet map; map.fnSetStyle(name) switches style.
 export function createMap(el, { style = 'Minimal', controls = true, contours, boundaries, onStyle } = {}) {
-  const map = L.map(el, { zoomControl: false, attributionControl: true, preferCanvas: true, zoomSnap: 0.5 }).setView(TAWANG, 10);
+  const map = L.map(el, { zoomControl: false, attributionControl: true, preferCanvas: true, zoomSnap: 0.5, maxZoom: 18 }).setView(TAWANG, 10);
   if (controls) L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
   map.attributionControl.setPrefix(false);
@@ -134,7 +135,7 @@ export function createMap(el, { style = 'Minimal', controls = true, contours, bo
     if (cfg.labels) {
       const pane = map.getPane('labels') || map.createPane('labels');
       pane.style.zIndex = 450; pane.style.pointerEvents = 'none';
-      state.labels = tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd', pane: 'labels', attribution: '' }).addTo(map);
+      state.labels = tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19, pane: 'labels', attribution: '' }).addTo(map);
     }
     if (boundaries ?? cfg.boundaries) state.bounds = boundariesLayer(map, { onSatellite: st === 'Satellite' }).addTo(map);
     state.style = st;

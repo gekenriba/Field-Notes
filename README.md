@@ -69,4 +69,4 @@ On the phone, open the site in Chrome and choose *Add to Home screen*, then tap 
 | `scripts/` | Web copy for the Android build; emulator test |
 | `vendor/` | Leaflet 1.9.4, Leaflet.heat 0.2.0, Fraunces font (OFL) |
 
-Data sources: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Pl@ntNet, AWS Terrain Tiles, Open-Meteo (Copernicus DEM), OpenStreetMap/Nominatim, CARTO, OpenTopoMap, Esri World Imagery, DataMeet boundaries (CC BY 4.0; districts as of Census 2011). Home screen photos: Wikimedia Commons contributors under CC BY / CC BY-SA, listed in Settings › Sources and credits.
+Data sources: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Pl@ntNet, AWS Terrain Tiles, Open-Meteo (Copernicus DEM), OpenStreetMap/Nominatim, Esri, OpenTopoMap, Esri World Imagery, DataMeet boundaries (CC BY 4.0; districts as of Census 2011). Home screen photos: Wikimedia Commons contributors under CC BY / CC BY-SA, listed in Settings › Sources and credits.

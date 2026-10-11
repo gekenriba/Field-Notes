@@ -69,8 +69,9 @@ export function phenogramHTML(matrix, { names = [...matrix.keys()].sort(), link 
     const cells = months.map((cell, i) => {
       const total = Object.values(cell).reduce((a, b) => a + b, 0);
       if (!total) return `<div class="pg-cell empty" aria-hidden="true"></div>`;
+      // Explicit heights (not flex) so older Android WebViews draw the segments too.
       const segs = GROUPS.filter((g) => cell[g.key]).map((g) =>
-        `<span style="flex:${cell[g.key]};background:${g.color}"></span>`).join('');
+        `<span style="height:${(cell[g.key] / total) * 100}%;background:${g.color}"></span>`).join('');
       const tip = `${MONTH_NAMES[i]}: ${total} record${total > 1 ? 's' : ''} — ` +
         GROUPS.filter((g) => cell[g.key]).map((g) => `${g.label.toLowerCase()} ${cell[g.key]}`).join(', ');
       return `<button type="button" class="pg-cell" data-tip="${esc(tip)}" aria-label="${esc(name + ', ' + tip)}">${segs}</button>`;
