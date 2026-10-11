@@ -1,13 +1,12 @@
-// Field Notes service worker: app works fully offline; viewed map tiles are cached for the field.
-const VERSION = 'fn-v2.0.0';
+// Field Notes service worker (browser only): keeps the app working offline. Map tiles are cached by js/maps.js.
+const VERSION = 'fn-v2.1.0';
 const SHELL = `${VERSION}-shell`;
-const TILES = 'fn-tiles';
-const MAX_TILES = 6000;
+const TILES = 'fn-tiles';   // filled by js/maps.js; kept across updates
 
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest',
   'css/app.css',
-  'js/app.js', 'js/db.js', 'js/media.js', 'js/geo.js', 'js/taxon.js', 'js/maps.js',
+  'js/app.js', 'js/native.js', 'js/db.js', 'js/media.js', 'js/geo.js', 'js/taxon.js', 'js/maps.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css', 'vendor/leaflet-heat.js',
   'vendor/leaflet/images/layers.png', 'vendor/leaflet/images/layers-2x.png',
   'vendor/leaflet/images/marker-icon.png', 'vendor/leaflet/images/marker-shadow.png',
@@ -15,8 +14,6 @@ const ASSETS = [
   'vendor/fonts/fraunces-latin-600-normal.woff2', 'vendor/fonts/fraunces-latin-600-italic.woff2',
   'icons/icon-192.png', 'icons/icon-512.png',
 ];
-
-const TILE_HOSTS = ['tile.opentopomap.org', 'server.arcgisonline.com', 'tile.openstreetmap.org'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -29,33 +26,10 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-async function trimTiles() {
-  const cache = await caches.open(TILES);
-  const keys = await cache.keys();
-  if (keys.length > MAX_TILES) for (const k of keys.slice(0, keys.length - MAX_TILES)) await cache.delete(k);
-}
-
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-
-  // Map tiles: cache-first so previously viewed areas work without signal.
-  if (TILE_HOSTS.some((h) => url.hostname.endsWith(h))) {
-    event.respondWith((async () => {
-      const cache = await caches.open(TILES);
-      const hit = await cache.match(req);
-      if (hit) return hit;
-      try {
-        const res = await fetch(req);
-        if (res.ok || res.type === 'opaque') { cache.put(req, res.clone()); if (Math.random() < 0.02) trimTiles(); }
-        return res;
-      } catch {
-        return new Response('', { status: 504 });
-      }
-    })());
-    return;
-  }
 
   // App shell: stale-while-revalidate for same-origin files.
   if (url.origin === self.location.origin) {
@@ -70,5 +44,5 @@ self.addEventListener('fetch', (event) => {
       return Response.error();
     })());
   }
-  // Everything else (GBIF, iNaturalist, Wikipedia, elevation) goes to the network; the app caches lookups itself.
+  // Everything else (tiles, GBIF, iNaturalist, Wikipedia, elevation) goes to the network; the app caches those itself.
 });

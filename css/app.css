@@ -19,8 +19,9 @@
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
   --radius: 14px;
   --tabbar-h: 64px;
-  --safe-b: env(safe-area-inset-bottom, 0px);
-  --safe-t: env(safe-area-inset-top, 0px);
+  /* The Android app injects --safe-area-inset-*; browsers provide env(). */
+  --safe-b: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-t: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   color-scheme: light;
 }
 

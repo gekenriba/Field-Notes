@@ -1,0 +1,73 @@
+name: Build Android app
+
+on:
+  push:
+    branches: [main, rebuild-local-first]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install and copy web app into the Android project
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - name: Build signed APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk ../dist/FieldNotes.apk
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs ../dist/FieldNotes.apk | head -3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FieldNotes-apk
+          path: dist/FieldNotes.apk
+
+      # A fixed release tag per branch gives a stable download link for the phone.
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="android-${GITHUB_REF_NAME//\//-}"
+          NOTES="Field Notes Android app, build ${{ github.run_number }} from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}. Download FieldNotes.apk on your phone and open it to install."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/FieldNotes.apk --clobber
+            gh release edit "$TAG" --title "Field Notes for Android (build ${{ github.run_number }})" --notes "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "$TAG" dist/FieldNotes.apk --title "Field Notes for Android (build ${{ github.run_number }})" --notes "$NOTES" --target "$GITHUB_SHA" --prerelease
+          fi

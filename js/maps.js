@@ -3,18 +3,67 @@
 
 export const TAWANG = [27.586, 91.866];
 
+// ---- Offline tile cache ----
+// Every tile shown is stored with the Cache API, so areas you have looked at while online
+// still display in the field without signal. Works in the browser and in the Android app.
+const TILE_CACHE = 'fn-tiles';
+const MAX_TILES = 8000;
+let cachePromise = null;
+const tileCache = () => (cachePromise ||= ('caches' in window ? caches.open(TILE_CACHE).catch(() => null) : Promise.resolve(null)));
+
+async function trimTileCache() {
+  const c = await tileCache(); if (!c) return;
+  const keys = await c.keys();
+  if (keys.length > MAX_TILES) for (const k of keys.slice(0, keys.length - MAX_TILES)) await c.delete(k);
+}
+
+async function tileSource(url) {
+  const c = await tileCache();
+  if (!c) return { src: url };
+  try {
+    const hit = await c.match(url);
+    if (hit) return { src: URL.createObjectURL(await hit.blob()), blob: true };
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) return { src: url };
+    c.put(url, res.clone()).then(() => { if (Math.random() < 0.02) trimTileCache(); }).catch(() => {});
+    return { src: URL.createObjectURL(await res.blob()), blob: true };
+  } catch {
+    return { src: url };   // offline and not cached, or tile server without CORS: let <img> try directly
+  }
+}
+
+const CachedTileLayer = L.TileLayer.extend({
+  createTile(coords, done) {
+    const tile = document.createElement('img');
+    tile.alt = '';
+    tile.setAttribute('role', 'presentation');
+    L.DomEvent.on(tile, 'load', L.Util.bind(this._tileOnLoad, this, done, tile));
+    L.DomEvent.on(tile, 'error', L.Util.bind(this._tileOnError, this, done, tile));
+    tileSource(this.getTileUrl(coords)).then(({ src, blob }) => {
+      if (blob) tile.dataset.blob = '1';
+      tile.src = src;
+    });
+    return tile;
+  },
+  onAdd(map) {
+    this.on('tileunload', (e) => { if (e.tile.dataset.blob) URL.revokeObjectURL(e.tile.src); });
+    return L.TileLayer.prototype.onAdd.call(this, map);
+  },
+});
+const tileLayer = (url, opts) => new CachedTileLayer(url, opts);
+
 export function baseLayers() {
   return {
-    Terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-      maxZoom: 17, crossOrigin: true,
+    Terrain: tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
       attribution: 'Map data © OpenStreetMap contributors, SRTM | Style © OpenTopoMap (CC-BY-SA)',
     }),
-    Satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19, crossOrigin: true,
+    Satellite: tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
       attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
     }),
-    Streets: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, crossOrigin: true, attribution: '© OpenStreetMap contributors',
+    Streets: tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap contributors',
     }),
   };
 }

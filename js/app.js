@@ -3,6 +3,7 @@ import { processPhoto, LiveCamera } from './media.js';
 import { getBestFix, demElevation, placeName, formatCoord } from './geo.js';
 import { GROUPS, suggest, lookup, fieldsFrom } from './taxon.js';
 import { createMap, heatLayer, pointsLayer, fitTo } from './maps.js';
+import { isNative, shareTextFile } from './native.js';
 
 /* ================= helpers ================= */
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -483,9 +484,10 @@ async function renderMore(view) {
     <section class="card">
       <h3>Storage on this device</h3>
       <p>${state.entries.length} records. ${est ? `${mb(est.usage)} MB used${est.quota ? ` of ~${Math.round(est.quota / 1073741824)} GB available` : ''}.` : ''}</p>
-      <p class="${est?.persisted ? 'ok' : 'warn'}">${est?.persisted ? '✓ Storage is marked persistent — the browser won’t clear it automatically.' : 'Storage is not yet persistent. Installing the app (Add to Home screen) and tapping below helps prevent the browser from clearing it.'}</p>
+      ${isNative() ? `<p class="muted small">Records and photos are stored inside the Field Notes app on this phone. Uninstalling the app or using “Clear storage” in Android settings deletes them — export a full backup regularly.</p>`
+      : `<p class="${est?.persisted ? 'ok' : 'warn'}">${est?.persisted ? '✓ Storage is marked persistent — the browser won’t clear it automatically.' : 'Storage is not yet persistent. Installing the app (Add to Home screen) and tapping below helps prevent the browser from clearing it.'}</p>
       ${est?.persisted ? '' : '<button class="btn btn-outline" id="persistBtn" type="button">Keep my data persistent</button>'}
-      <p class="muted small">Data lives only in this browser on this phone. Export a backup regularly — clearing site data or uninstalling the browser deletes it.</p>
+      <p class="muted small">Data lives only in this browser on this phone. Export a backup regularly — clearing site data or uninstalling the browser deletes it.</p>`}
     </section>
     <section class="card">
       <h3>Export</h3>
@@ -517,6 +519,10 @@ async function renderMore(view) {
 }
 
 async function download(filename, text, type) {
+  if (isNative()) {
+    try { await shareTextFile(filename, text); } catch (err) { toast(`Export failed: ${err.message || err}`); }
+    return;
+  }
   const blob = new Blob([text], { type });
   const file = new File([blob], filename, { type });
   if (navigator.canShare?.({ files: [file] }) && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
@@ -1074,7 +1080,7 @@ function updateNet() {
 window.addEventListener('online', () => { updateNet(); enrichPending(); });
 window.addEventListener('offline', updateNet);
 
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+if ('serviceWorker' in navigator && location.protocol !== 'file:' && !isNative()) {
   navigator.serviceWorker.register('sw.js').then((reg) => {
     reg.addEventListener('updatefound', () => {
       const nw = reg.installing;
@@ -1085,6 +1091,21 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       });
     });
   }).catch((err) => console.warn('SW registration failed', err));
+}
+
+/* ================= Android back button ================= */
+if (isNative()) {
+  document.addEventListener('backbutton', () => {
+    const route = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0] || 'home';
+    if (!overlays.length && route === 'home') { navigator.app?.exitApp?.(); return; }
+    const before = location.href;
+    let moved = false;
+    const mark = () => { moved = true; };
+    window.addEventListener('popstate', mark, { once: true });
+    history.back();
+    // Opened straight onto a page with nothing behind it: go to Home instead of doing nothing.
+    setTimeout(() => { window.removeEventListener('popstate', mark); if (!moved && location.href === before && !overlays.length) location.hash = '#/home'; }, 350);
+  });
 }
 
 /* ================= boot ================= */
