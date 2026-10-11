@@ -13,9 +13,21 @@ Photos, GPS, altitude and notes are stored **on the device** (IndexedDB) — no 
 - **Location** — best-of-several GPS fix with accuracy; altitude from GPS, or a 90 m elevation model when GPS gives none (labelled as such); nearest place name from OpenStreetMap; GPS/date read from gallery photos’ EXIF.
 - **Unsaved work is never lost** — the form autosaves; if the browser closes mid-entry you get a *Restore* banner.
 - **Export** — full JSON backup (with photos), CSV with Darwin Core column names, and GeoJSON for QGIS. Import merges backups.
-- **Works offline** — the app installs to the home screen; map tiles you have viewed are cached.
+- **Works offline** — as an Android app or installed to the home screen; map areas you have viewed are cached for use without signal.
 
 Missing values are shown as *not reported* rather than guessed.
+
+## Android app
+
+Download **[FieldNotes.apk](https://github.com/gekenriba/Field-Notes/releases/download/android-rebuild-local-first/FieldNotes.apk)** on your phone and open it. Android will ask you to allow installing from your browser/Files app the first time. Allow camera and location when the app asks.
+
+- A new APK is built automatically by GitHub Actions on every push and attached to the release (`android-<branch>`). Newer builds install over older ones and keep your records.
+- Each build is also installed on an Android emulator that takes a photo, gets GPS, looks up a name, saves a record and a draft, restarts the app, opens the maps and exports a file. The results (`emulator-results.md`) and screenshots are attached to the same release.
+- Exports open the Android share sheet, so you can save the file to Files, Drive, WhatsApp or email.
+- Data is stored inside the app. Uninstalling the app deletes it, so export a full backup now and then.
+- Build locally (needs Android Studio / SDK and JDK 21): `npm install && npm run android`, then `cd android && ./gradlew assembleRelease`.
+
+**Signing:** builds are signed with `android/app/fieldnotes-sideload.jks`, which is in this repo so every build can update the previous one. That is fine for installing on your own phones; before sharing the app widely or publishing to Play Store, create your own keystore and add it as repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (the workflow uses them automatically; you'll need to uninstall the old build once).
 
 ## Run / deploy
 
@@ -38,7 +50,11 @@ On the phone, open the site in Chrome and choose *Add to Home screen*, then tap 
 | `js/geo.js` | GPS, elevation model, place names |
 | `js/taxon.js` | GBIF / iNaturalist / Wikipedia lookups |
 | `js/maps.js` | Leaflet layers, heatmaps, markers |
-| `sw.js` | Offline cache |
+| `js/native.js` | Android bridges (share sheet) |
+| `sw.js` | Offline cache (browser only) |
+| `android/` | Capacitor Android project |
+| `.github/workflows/android.yml` | Builds the APK and runs the emulator test |
+| `scripts/` | Web copy for the Android build; emulator test |
 | `vendor/` | Leaflet 1.9.4, Leaflet.heat 0.2.0, Fraunces font (OFL) |
 
 Data sources: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Open-Meteo (Copernicus DEM), OpenStreetMap/Nominatim, OpenTopoMap, Esri World Imagery.

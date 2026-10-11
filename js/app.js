@@ -679,9 +679,9 @@ const camera = {
     await delMeta('unsavedForm');
     requestPersistence();
     await loadEntries();
-    fillAltitudeLater(e);
+    if (fix) fillAltitudeLater(e); else locateDraftLater(e.id);
     this.shots = []; $('#camStrip').innerHTML = ''; this.updateButtons();
-    toast('Saved as draft. Next plant!');
+    toast(fix ? 'Saved as draft. Next plant!' : 'Saved as draft — adding GPS when the fix arrives.');
   },
 
   async done() {
@@ -1053,6 +1053,19 @@ async function enrich(e) {
     await db.put('entries', cur);
     await loadEntries();
   } catch { /* offline: retried on reconnect */ }
+}
+// A draft saved before the first GPS fix gets its location filled in when the fix arrives.
+async function locateDraftLater(id) {
+  try {
+    const fix = await getBestFix({ maxMs: 45000, goodEnough: 20 });
+    const cur = await db.get('entries', id);
+    if (!cur || cur.lat != null) return;
+    Object.assign(cur, { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, updatedAt: new Date().toISOString() });
+    if (cur.altitude == null && fix.altitude != null) { cur.altitude = fix.altitude; cur.altitudeSource = `GPS ±${fix.altitudeAccuracy ?? '?'} m`; }
+    await db.put('entries', cur);
+    await loadEntries();
+    fillAltitudeLater(cur);
+  } catch { /* no fix: the draft stays without coordinates and can be edited later */ }
 }
 async function fillAltitudeLater(e) {
   if (e.altitude != null || e.lat == null || !navigator.onLine) return;

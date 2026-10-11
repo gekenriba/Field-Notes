@@ -34,7 +34,11 @@ class CdpPage:
             for k, fn in self.handlers:
                 if k == 'pageerror': fn(text)
         elif m == 'Runtime.consoleAPICalled':
-            text = ' '.join(str(a.get('value', a.get('description', ''))) for a in prm.get('args', []))
+            def fmt(a):
+                if 'value' in a: return str(a['value'])
+                props = a.get('preview', {}).get('properties', [])
+                return (a.get('description', '') + ' ' + ' '.join(f"{p['name']}={p.get('value')}" for p in props)).strip()
+            text = ' '.join(fmt(a) for a in prm.get('args', []))
             for k, fn in self.handlers:
                 if k == 'console': fn(type('M', (), {'type': prm.get('type'), 'text': text})())
 
@@ -204,7 +208,8 @@ def main():
             page.click('#camClose'); time.sleep(1)
             badge = page.text_content('#draftBadge')
             if badge.strip() != '1': raise Exception(f'draft badge {badge!r}')
-            return 'draft badge 1'
+            page.wait_for_function('window.fieldNotes.state.entries.filter(e => e.status === "draft" && e.lat != null).length === 1', timeout=50000)
+            return 'draft badge 1, draft has GPS'
         check('Quick-save unidentified draft', draft)
 
         def stored():
@@ -268,7 +273,8 @@ def main():
             return 'back button closes camera, app stays open'
         check('Back button closes camera', back)
 
-        errs = [l for l in logs if l.startswith(('error', 'pageerror'))]
+        # Debug builds log rejected native calls; dismissing the share sheet is an expected rejection.
+        errs = [l for l in logs if l.startswith(('error', 'pageerror')) and not re.search(r'cancel', l, re.I)]
         results.append(('No JavaScript errors', 'PASS' if not errs else 'FAIL', '; '.join(errs)[:500]))
 
     crash = adb('logcat', '-d', '-b', 'crash')
