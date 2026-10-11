@@ -170,8 +170,10 @@ def main():
         def hero():
             page.wait_for_function('document.querySelector(".hero-slide.on img") && document.querySelector(".hero-slide.on img").naturalWidth > 0', timeout=15000)
             time.sleep(1.5); shot('01b-home')
-            return page.text_content('#heroCredit')
-        check('Home photos and credits load', hero)
+            n = page.evaluate('document.querySelectorAll(".hero-slide").length')
+            if page.query_selector('#heroCredit, .hero-credit'): raise Exception('old photo credits still shown')
+            return f'{n} photos by Geken, no captions or credits'
+        check('Home photos load (no credits)', hero)
 
         def set_key():
             page.evaluate('location.hash = "#/more"'); page.wait_for_selector('#idKey')
@@ -203,6 +205,11 @@ def main():
             return f'{n} photo in form'
         check('Photo carried into entry form', to_form)
 
+        def gps():
+            page.wait_for_function('document.querySelector("#fLat").value !== ""', timeout=45000)
+            return f'lat {page.input_value("#fLat")}, lng {page.input_value("#fLng")}, alt {page.input_value("#fAlt")}, {page.text_content("#gpsStatus")}'
+        check('Phone GPS fills coordinates for camera photos', gps)
+
         def engines():
             page.wait_for_function('document.querySelector("#suggestCard") && !document.querySelector("#suggestCard").classList.contains("hidden") && !/Asking|checking/.test(document.querySelector("#suggestCard").textContent) && /Gemini|Pl@ntNet|Suggest/.test(document.querySelector("#suggestCard").textContent)', timeout=60000)
             t = ' '.join(page.text_content('#suggestCard').split())
@@ -221,10 +228,6 @@ def main():
             return f'lat {page.input_value("#fLat")}, lng {page.input_value("#fLng")}, alt {page.input_value("#fAlt")}, district {page.input_value("#fDistrict")}, locality {page.input_value("#fLocality")}'
         check('Google Maps link fills location and district (live OSM)', maps_link)
 
-        def gps():
-            page.wait_for_function('document.querySelector("#fLat").value !== ""', timeout=45000)
-            return f'lat {page.input_value("#fLat")}, lng {page.input_value("#fLng")}, alt {page.input_value("#fAlt")}, {page.text_content("#gpsStatus")}'
-        check('GPS fills coordinates', gps)
 
         def lookup():
             page.fill('#fScientific', 'Rhododendron arboreum')
