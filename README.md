@@ -2,14 +2,17 @@
 
 A field journal for botanists in the Eastern Himalaya. Developed by **Geken**.
 
-Offline-first field journal for botanical observations in Tawang District, Arunachal Pradesh.
+Offline-first field journal for botanical observations across Arunachal Pradesh.
 Photos, GPS, altitude and notes are stored **on the device** (IndexedDB) — no account or server needed.
 
 ## What it does
 
-- **Live identification camera.** While you point the camera, on-device analysis marks flowers (with their colour) and foliage using small, unobtrusive callouts. When you hold steady, it asks [Pl@ntNet](https://my.plantnet.org) for likely species and shows the top three with family and confidence. Tap one to carry it into the entry. The callouts work offline; name suggestions need internet and a free Pl@ntNet API key (Settings).
-- **Quick capture and drafts.** Save a plant as a draft in one tap and move on. GPS, time and any live suggestions are kept, and drafts wait under *Records › Drafts* until you identify them.
-- **Suggestions on entries.** With photos attached, the entry shows likely species, plus the most likely genus and family when the species is uncertain, and whether GBIF has records of each suggestion in India. Picking a suggestion marks the ID as *probable*.
+- **Camera.** A plain in-app camera: shoot several photos, then fill the entry or save a quick draft. GPS and time are taken from the phone when the photo is taken now.
+- **DSLR photos.** Add photos from the gallery and the date and time come from the photo's metadata (EXIF), with the camera model noted. Both stay editable; if the photo has no date, the form asks for it. Phone GPS is *not* used for gallery photos.
+- **Location from a Google Maps link.** Paste a shared Maps link (short `maps.app.goo.gl` links work in the Android app), a dropped-pin link, or coordinates in decimal or degrees-minutes-seconds. The app fills latitude and longitude, altitude from an elevation model, locality and district (OpenStreetMap; Census 2011 boundaries as an offline fallback), and keeps the link on the record. The source of the date and location is shown on each record.
+- **Suggestions on entries.** With photos attached and a location set, the entry asks **Gemini** (Google's vision model, prompted as an Eastern Himalayan botanist and given the place, elevation, date and your notes) and **Pl@ntNet** together. Results are merged, names both agree on are marked, each name is checked against GBIF (accepted name or synonym, records in Arunachal or India), and the visible features and what to check next are listed. When the species is uncertain the likely genus and family are shown. Picking one marks the ID as *probable*. Either key alone works; both is most accurate. Keys are set and tested in Settings.
+- **Quick capture and drafts.** Save a plant as a draft in one tap and move on. Drafts wait under *Records › Drafts* until you identify them.
+- **Live ID (experimental).** The v3 live camera with callouts and real-time names is kept as a backup under *Settings › Identification › Experimental*. It is off by default.
 - **Growth stage and population.** Each record has a growth stage (BBCH-based: emerging, vegetative, buds, flowering with early/peak/late, fruiting, ripe/seeding, senescent, dormant) and the number of plants, counted or estimated.
 - **Phenology.** *Flora › Phenology* draws a month-by-stage chart for every species from your records, filterable by family, with a table view. Each species and family page has its own.
 - **Family icons.** Minimal icons generated from each family’s key traits (symmetry, petal number and shape, inflorescence type, typical colour) for ~60 families common in the Himalaya.
@@ -22,7 +25,7 @@ Missing values are shown as *not reported* rather than guessed.
 
 ## Android app
 
-Download **[FieldNotes.apk](https://github.com/gekenriba/Field-Notes/releases/download/android-main/FieldNotes.apk)** on your phone and open it. Android will ask you to allow installing from your browser/Files app the first time. Allow camera and location when the app asks.
+Download **[FieldNotes.apk](https://github.com/gekenriba/Field-Notes/releases/download/android-v4/FieldNotes.apk)** on your phone and open it. Android will ask you to allow installing from your browser/Files app the first time. Allow camera and location when the app asks.
 
 - A new APK is built automatically by GitHub Actions on every push and attached to the release (`android-<branch>`). Newer builds install over older ones and keep your records.
 - Each build is also installed on an Android emulator that takes a photo, gets GPS, looks up a name, saves a record and a draft, restarts the app, opens the maps and exports a file. The results (`emulator-results.md`) and screenshots are attached to the same release.
@@ -50,18 +53,19 @@ On the phone, open the site in Chrome and choose *Add to Home screen*, then tap 
 | `js/app.js` | Views, camera flow, form, drafts, exports |
 | `js/db.js` | IndexedDB storage and backup |
 | `js/media.js` | Live camera, photo resizing, EXIF reader |
-| `js/geo.js` | GPS, elevation model, place names |
+| `js/geo.js` | GPS, elevation model, place names and district |
+| `js/location.js` | Google Maps link and coordinate parsing, offline district lookup |
 | `js/taxon.js` | GBIF / iNaturalist / Wikipedia lookups |
 | `js/maps.js` | Leaflet layers, heatmaps, markers |
-| `js/native.js` | Android bridges (share sheet) |
-| `js/morph.js` | On-device flower and foliage detection for the live camera |
-| `js/ident.js` | Pl@ntNet suggestions, daily quota guard, GBIF India check |
+| `js/native.js` | Android bridges (share sheet, native HTTP) |
+| `js/morph.js` | On-device flower and foliage detection (experimental live ID) |
+| `js/ident.js` | Gemini + Pl@ntNet suggestions, merging, GBIF checks |
 | `js/phenology.js` | Growth stages and phenology charts |
 | `js/familyIcons.js` | Trait-based family icon generator |
 | `js/contours.js` | Contour lines and relief from AWS Terrain Tiles |
 | `js/backup.js` | Zip backup and restore |
 | `js/ui.js` | Haptics and motion |
-| `assets/hero/` | Home screen photos (Wikimedia Commons, credits in the app) |
+| `assets/hero/` | Home screen photos by Geken (metadata and GPS removed) |
 | `assets/geo/` | India state and district boundaries (DataMeet) |
 | `sw.js` | Offline cache (browser only) |
 | `android/` | Capacitor Android project |
@@ -69,4 +73,4 @@ On the phone, open the site in Chrome and choose *Add to Home screen*, then tap 
 | `scripts/` | Web copy for the Android build; emulator test |
 | `vendor/` | Leaflet 1.9.4, Leaflet.heat 0.2.0, Fraunces font (OFL) |
 
-Data sources: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Pl@ntNet, AWS Terrain Tiles, Open-Meteo (Copernicus DEM), OpenStreetMap/Nominatim, Esri, OpenTopoMap, Esri World Imagery, DataMeet boundaries (CC BY 4.0; districts as of Census 2011). Home screen photos: Wikimedia Commons contributors under CC BY / CC BY-SA, listed in Settings › Sources and credits.
+Data sources: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Google Gemini API, Pl@ntNet, AWS Terrain Tiles, Open-Meteo (Copernicus DEM), OpenStreetMap/Nominatim, Esri, OpenTopoMap, Esri World Imagery, DataMeet boundaries (CC BY 4.0; districts as of Census 2011). Home screen photographs by Geken.

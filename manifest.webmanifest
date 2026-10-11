@@ -1,7 +1,7 @@
 {
-  "name": "Field Notes \u2014 Tawang",
+  "name": "Field Notes — Arunachal",
   "short_name": "Field Notes",
-  "description": "Field journal for botanists in the Eastern Himalaya: photos, GPS and altitude, live identification hints, growth stages, phenology and distribution maps. Developed by Geken.",
+  "description": "Field journal for documenting the flora of Arunachal Pradesh: photos, location and altitude, dates from photo metadata, identification suggestions, growth stages, phenology and distribution maps. Developed by Geken.",
   "start_url": "./#/home",
   "scope": "./",
   "display": "standalone",

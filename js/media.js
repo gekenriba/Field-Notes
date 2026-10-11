@@ -84,6 +84,9 @@ function parseTiff(v, start) {
   };
   const out = {};
   const ifd0 = readIFD(u32(start + 4));
+  const make = ifd0[0x010f] ? ascii(ifd0[0x010f]).trim() : '';
+  const model = ifd0[0x0110] ? ascii(ifd0[0x0110]).trim() : '';
+  if (model) out.camera = model.toLowerCase().startsWith(make.split(' ')[0].toLowerCase()) ? model : `${make} ${model}`.trim();
   if (ifd0[0x8769]) {
     const exifIFD = readIFD(u32(ifd0[0x8769].valOff));
     const dt = exifIFD[0x9003] || ifd0[0x0132];

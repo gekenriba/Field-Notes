@@ -1,5 +1,5 @@
 // Field Notes service worker (browser only): keeps the app working offline. Map tiles are cached by js/maps.js.
-const VERSION = 'fn-v3.0.0';
+const VERSION = 'fn-v4.0.0';
 const SHELL = `${VERSION}-shell`;
 const TILES = 'fn-tiles';   // filled by js/maps.js; kept across updates
 
@@ -15,6 +15,7 @@ const ASSETS = [
   "js/familyIcons.js",
   "js/geo.js",
   "js/ident.js",
+  "js/location.js",
   "js/maps.js",
   "js/media.js",
   "js/morph.js",
@@ -42,18 +43,27 @@ const ASSETS = [
   "assets/geo/arunachal-districts.json",
   "assets/geo/india-districts.json",
   "assets/geo/india-states.json",
-  "assets/hero/credits.json",
-  "assets/hero/aconitum-ferox-1.jpg",
-  "assets/hero/bergenia-ciliata-1.jpg",
-  "assets/hero/dactylorhiza-hatagirea-2.jpg",
-  "assets/hero/fritillaria-cirrhosa-3.jpg",
-  "assets/hero/meconopsis-horridula-3.jpg",
-  "assets/hero/nardostachys-jatamansi-3.jpg",
-  "assets/hero/paris-polyphylla-2.jpg",
-  "assets/hero/rheum-nobile-2.jpg",
-  "assets/hero/rhododendron-anthopogon-0.jpg",
-  "assets/hero/saussurea-obvallata-1.jpg",
-  "assets/hero/sinopodophyllum-hexandrum-1.jpg",
+  "assets/hero/photos.json",
+  "assets/hero/hero-01.jpg",
+  "assets/hero/hero-02.jpg",
+  "assets/hero/hero-03.jpg",
+  "assets/hero/hero-04.jpg",
+  "assets/hero/hero-05.jpg",
+  "assets/hero/hero-06.jpg",
+  "assets/hero/hero-07.jpg",
+  "assets/hero/hero-08.jpg",
+  "assets/hero/hero-09.jpg",
+  "assets/hero/hero-10.jpg",
+  "assets/hero/hero-11.jpg",
+  "assets/hero/hero-12.jpg",
+  "assets/hero/hero-13.jpg",
+  "assets/hero/hero-14.jpg",
+  "assets/hero/hero-15.jpg",
+  "assets/hero/hero-16.jpg",
+  "assets/hero/hero-17.jpg",
+  "assets/hero/hero-18.jpg",
+  "assets/hero/hero-19.jpg",
+  "assets/hero/hero-20.jpg",
 ];
 
 self.addEventListener('install', (event) => {

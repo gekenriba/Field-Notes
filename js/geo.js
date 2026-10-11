@@ -55,13 +55,14 @@ export async function demElevation(lat, lng) {
   return Number.isFinite(e) ? Math.round(e) : null;
 }
 
-// Nearest named place from OpenStreetMap (Nominatim). Used only to pre-fill an empty locality.
+// Nearest named place and current district from OpenStreetMap (Nominatim).
 export async function placeName(lat, lng) {
-  const j = await fetchJSON(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=${lat}&lon=${lng}`);
+  const j = await fetchJSON(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&addressdetails=1&accept-language=en&lat=${lat}&lon=${lng}`);
   const a = j?.address || {};
-  const parts = [a.village || a.hamlet || a.locality || a.suburb || a.town || a.city, a.county || a.state_district, a.state]
-    .filter(Boolean);
-  return [...new Set(parts)].join(', ') || j?.display_name || '';
+  const local = [a.village || a.hamlet || a.isolated_dwelling || a.locality || a.suburb, a.town || a.city || a.municipality || a.county_town].filter(Boolean);
+  const district = String(a.state_district || a.county || '').replace(/\s+district$/i, '').trim();
+  const name = [...new Set(local)].join(', ') || (j?.name || '');
+  return { name, district: /arunachal/i.test(a.state || '') ? district : '' , state: a.state || '' };
 }
 
 export function formatCoord(lat, lng) {
