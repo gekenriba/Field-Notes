@@ -24,14 +24,14 @@ async function waitFor(fn, ms = 20000, what = 'condition') {
 const click = (s) => { const el = $(s); if (!el) throw new Error(`missing ${s}`); el.click(); };
 const fill = (s, v) => { const el = $(s); if (!el) throw new Error(`missing ${s}`); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
 const text = (s) => ($(s)?.textContent || '').replace(/\s+/g, ' ').trim();
-const visible = (s) => { const el = $(s); return el && !el.classList.contains('hidden') && el.offsetParent !== null; };
+const visible = (s) => { const el = $(s); if (!el || el.classList.contains('hidden')) return false; const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0; };
 
 async function check(name, fn, shot) {
   out.step = shot || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
   try { const detail = await fn(); out.checks.push({ name, ok: true, detail: String(detail ?? '') }); }
   catch (e) { out.checks.push({ name, ok: false, detail: String(e?.message || e) }); }
   await save();
-  await sleep(2500); // time for the workflow's screenshot
+  await sleep(4000); // time for the workflow's screenshot
 }
 
 async function phase1() {

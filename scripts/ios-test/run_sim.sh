@@ -33,7 +33,7 @@ run_until() {   # $1 = phase value to wait for, $2 = timeout seconds
     [ -f "$RES" ] || continue
     local step; step=$(field step)
     if [ -n "$step" ] && [ "$step" != "$last" ] && [ "$step" != "relaunch" ] && [ "$step" != "done" ]; then
-      sleep 1.2; xcrun simctl io "$UDID" screenshot "$OUT/$step.png" >/dev/null 2>&1; last="$step"
+      sleep 0.3; xcrun simctl io "$UDID" screenshot "$OUT/$step.png" >/dev/null 2>&1; last="$step"
     fi
     [ "$(field phase)" = "$1" ] && return 0
   done
