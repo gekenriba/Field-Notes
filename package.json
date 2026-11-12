@@ -1,6 +1,6 @@
 {
   "name": "field-notes",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "private": true,
   "description": "Field Notes: a field journal for documenting the flora of Arunachal Pradesh. Developed by Geken.",
   "scripts": {
@@ -13,7 +13,9 @@
     "@capacitor/clipboard": "^8.0.1",
     "@capacitor/core": "^8.5.3",
     "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/geolocation": "^8.2.4",
     "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.3",
     "@capacitor/share": "^8.0.3",
     "fflate": "^0.8.3"
   },

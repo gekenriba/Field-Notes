@@ -1,5 +1,5 @@
 // Field Notes service worker (browser only): keeps the app working offline. Map tiles are cached by js/maps.js.
-const VERSION = 'fn-v4.0.0';
+const VERSION = 'fn-v4.1.0';
 const SHELL = `${VERSION}-shell`;
 const TILES = 'fn-tiles';   // filled by js/maps.js; kept across updates
 

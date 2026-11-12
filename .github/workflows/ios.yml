@@ -1,0 +1,142 @@
+name: Build iOS app
+
+on:
+  push:
+    branches: [main, ios]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Unsigned .ipa for sideloading (Sideloadly / AltStore sign it with your Apple ID), plus a
+  # self-test on the iOS simulator. Results and screenshots go to the release "ios-<branch>".
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" || true
+          xcodebuild -version
+
+      - name: Install and copy web app into the iOS project
+        run: |
+          npm ci
+          npm run build
+          npx cap sync ios
+
+      - name: Build unsigned device app (.ipa)
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/device \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -25
+          APP=$(find build/device/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          mkdir -p dist/Payload && cp -R "$APP" dist/Payload/
+          (cd dist && zip -qry FieldNotes.ipa Payload && rm -rf Payload)
+          ls -la dist
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: FieldNotes-ipa
+          path: dist/FieldNotes.ipa
+
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="ios-${GITHUB_REF_NAME//\//-}"
+          TITLE="Field Notes for iPhone (build ${{ github.run_number }})"
+          NOTES="Unsigned iPhone app, build ${{ github.run_number }} from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}. Install FieldNotes.ipa with Sideloadly or AltStore using your Apple ID (see README). Simulator results and screenshots are attached."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/FieldNotes.ipa --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "$TAG" dist/FieldNotes.ipa --title "$TITLE" --notes "$NOTES" --target "$GITHUB_SHA" --prerelease
+          fi
+
+      - name: Build self-test app for the simulator
+        run: |
+          mkdir -p www/selftest
+          cp scripts/ios-test/selftest.js scripts/ios-test/dslr.jpg www/selftest/
+          sed -i '' 's#</body>#<script type="module" src="selftest/selftest.js"></script></body>#' www/index.html
+          grep -c selftest www/index.html
+          npx cap copy ios
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/sim \
+            CODE_SIGNING_ALLOWED=NO build | tail -15
+
+      - name: Run on the iOS simulator
+        run: |
+          chmod +x scripts/ios-test/run_sim.sh
+          scripts/ios-test/run_sim.sh "$(find build/sim/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' | head -1)"
+
+      - name: Attach screenshots and results to the release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="ios-${GITHUB_REF_NAME//\//-}"
+          cd test-out 2>/dev/null || exit 0
+          for f in *; do mv "$f" "simulator-$f"; done
+          gh release upload "$TAG" simulator-* --clobber || true
+
+  # Optional: TestFlight. Runs only when the App Store Connect secrets exist (paid Apple
+  # Developer account). See README › iPhone.
+  testflight:
+    needs: ipa
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+    steps:
+      - name: Check for App Store Connect secrets
+        id: gate
+        run: echo "run=$([ -n "$ASC_KEY_ID" ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        if: steps.gate.outputs.run == 'yes'
+      - uses: actions/setup-node@v5
+        if: steps.gate.outputs.run == 'yes'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Archive and upload to TestFlight
+        if: steps.gate.outputs.run == 'yes'
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" || true
+          npm ci && npm run build && npx cap sync ios
+          KEY="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"; echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$KEY"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/App.xcarchive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            "${AUTH[@]}" archive | tail -20
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/App.xcarchive -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath build/export "${AUTH[@]}" | tail -20
