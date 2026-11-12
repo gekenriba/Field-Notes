@@ -13,7 +13,7 @@ import { locationFromInput, district2011, inArunachalBox } from './location.js';
 import { MorphScanner, coverTransform } from './morph.js';
 import { buildBackup, restoreBackup } from './backup.js';
 
-export const APP_VERSION = '4.0';
+export const APP_VERSION = '4.1';
 const DEVELOPER = 'Geken';
 
 /* ================= helpers ================= */
@@ -728,7 +728,7 @@ async function renderMore(view, _a, params) {
         <button class="btn btn-primary" id="bkNow" type="button">Back up to Google Drive</button>
         <button class="btn btn-outline" id="bkRestore" type="button">Restore from a backup</button>
       </div>
-      <p class="muted small">The backup is one .zip file with all records and full-size photos. ${isNative() ? 'Choose “Drive” in the share sheet to save it to Google Drive, or Files to keep a copy on the phone.' : 'It downloads to this device.'}</p>
+      <p class="muted small">The backup is one .zip file with all records and full-size photos. ${isNative() ? 'In the share sheet choose Google Drive, or Save to Files (iPhone) / Files (Android) to keep a copy.' : 'It downloads to this device.'}</p>
       <details><summary class="small" style="cursor:pointer;font-weight:600">Moving to a new phone</summary>
         <ol class="steps small"><li>On this phone, tap <b>Back up to Google Drive</b> and choose Drive.</li><li>Install Field Notes on the new phone.</li><li>Open Settings there, tap <b>Restore from a backup</b> and pick the file from Drive.</li></ol>
         <p class="muted small">Restoring adds records to the ones already on a phone; a record is replaced only if the backup copy is newer. Records are not uploaded anywhere else: GitHub is not suitable because informant and location details are sensitive.</p>

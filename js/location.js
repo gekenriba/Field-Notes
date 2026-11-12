@@ -62,7 +62,7 @@ export async function locationFromInput(input) {
   if (direct) return { ...direct, url: findUrl(text) || null };
   const url = findUrl(text);
   if (!url) throw new Error('No coordinates or link found. In Google Maps, drop a pin, tap Share and copy the link, or copy the coordinates.');
-  if (!isNative() && isShortLink(url)) throw new Error('Short links can only be opened in the Android app. In the browser, open the link and paste the full address from the address bar.');
+  if (!isNative() && isShortLink(url)) throw new Error('Short links can only be opened in the Field Notes app (Android or iPhone). In the browser, open the link and paste the full address from the address bar.');
   // Follow the short link (and any consent page) to the full Maps URL.
   let r;
   try { r = await http(url, { responseType: 'text', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36', 'Accept-Language': 'en' } }); }

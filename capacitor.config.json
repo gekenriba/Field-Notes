@@ -12,5 +12,12 @@
       "insetsHandling": "css",
       "style": "DARK"
     }
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#14332a",
+    "scrollEnabled": true,
+    "allowsLinkPreview": false,
+    "webContentsDebuggingEnabled": false
   }
 }

@@ -120,7 +120,7 @@ function parseTiff(v, start) {
 export class LiveCamera {
   constructor(video) { this.video = video; this.stream = null; this.track = null; this.facing = 'environment'; }
 
-  static supported() { return !!navigator.mediaDevices?.getUserMedia && window.isSecureContext; }
+  static supported() { return !!navigator.mediaDevices?.getUserMedia && (window.isSecureContext || !!window.Capacitor?.isNativePlatform?.()); }
 
   async start() {
     this.stop();

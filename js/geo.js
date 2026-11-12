@@ -2,7 +2,50 @@
 
 // Watch position for up to `maxMs`, keeping the most accurate fix. Resolves early once
 // accuracy is good enough. Mountain terrain often gives a poor first fix, so this helps.
-export function getBestFix({ maxMs = 15000, goodEnough = 15, onUpdate } = {}) {
+export function getBestFix(opts = {}) {
+  if (window.Capacitor?.getPlatform?.() === 'ios') return iosBestFix(opts);
+  return webBestFix(opts);
+}
+
+const toFix = (c) => ({
+  lat: +c.latitude.toFixed(6),
+  lng: +c.longitude.toFixed(6),
+  accuracy: Math.round(c.accuracy),
+  altitude: c.altitude != null && (c.altitudeAccuracy == null || c.altitudeAccuracy > 0) ? Math.round(c.altitude) : null,
+  altitudeAccuracy: c.altitudeAccuracy != null && c.altitudeAccuracy > 0 ? Math.round(c.altitudeAccuracy) : null,
+});
+
+// iPhone app: Capacitor's Geolocation plugin (Core Location), polled until the fix is good enough.
+async function iosBestFix({ maxMs = 15000, goodEnough = 15, onUpdate } = {}) {
+  const cap = window.Capacitor;
+  let perm = await cap.nativePromise('Geolocation', 'checkPermissions', {}).catch(() => ({}));
+  if (perm.location !== 'granted') perm = await cap.nativePromise('Geolocation', 'requestPermissions', { permissions: ['location'] }).catch((e) => ({ error: e }));
+  if (perm.error && /disabled/i.test(perm.error.message || '')) throw new Error('Location Services are off. Turn them on in Settings › Privacy & Security.');
+  if (perm.location === 'denied') throw new Error('Location permission denied. Allow it in Settings › Field Notes › Location.');
+  const end = Date.now() + maxMs;
+  let best = null, lastErr = null;
+  while (Date.now() < end) {
+    const left = end - Date.now();
+    try {
+      const pos = await Promise.race([
+        cap.nativePromise('Geolocation', 'getCurrentPosition', { enableHighAccuracy: true, timeout: left, maximumAge: 0 }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), left)),
+      ]);
+      const fix = toFix(pos.coords);
+      if (!best || fix.accuracy < best.accuracy) { best = fix; onUpdate?.(best); }
+      if (fix.accuracy <= goodEnough) break;
+    } catch (e) {
+      lastErr = e;
+      if (/denied|permission/i.test(e.message || '')) throw new Error('Location permission denied. Allow it in Settings › Field Notes › Location.');
+      if (e.message === 'timeout') break;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  if (best) return best;
+  throw new Error(lastErr && lastErr.message !== 'timeout' ? `GPS: ${lastErr.message}` : 'Could not get a GPS fix. Try again in the open sky.');
+}
+
+function webBestFix({ maxMs = 15000, goodEnough = 15, onUpdate } = {}) {
   return new Promise((resolve, reject) => {
     if (!('geolocation' in navigator)) return reject(new Error('GPS is not available on this device.'));
     let best = null;

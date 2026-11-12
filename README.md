@@ -35,6 +35,17 @@ Download **[FieldNotes.apk](https://github.com/gekenriba/Field-Notes/releases/do
 
 **Signing:** builds are signed with `android/app/fieldnotes-sideload.jks`, which is in this repo so every build can update the previous one. That is fine for installing on your own phones; before sharing the app widely or publishing to Play Store, create your own keystore and add it as repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (the workflow uses them automatically; you'll need to uninstall the old build once).
 
+## iPhone app
+
+GitHub Actions builds the iPhone app on a Mac on every push (`.github/workflows/ios.yml`) and attaches **FieldNotes.ipa** to the release `ios-<branch>`, together with the results and screenshots of a self-test on the iOS simulator.
+
+The .ipa is **unsigned**: Apple only lets an app onto an iPhone once it is signed with an Apple ID. Two ways:
+
+- **Free Apple ID (Sideloadly, from Windows or Mac).** Install iTunes (from apple.com, not the Microsoft Store version) and [Sideloadly](https://sideloadly.io). Connect the iPhone by cable and trust the computer. Drag FieldNotes.ipa into Sideloadly, enter your Apple ID and press Start. On the iPhone: Settings › General › VPN & Device Management › trust your Apple ID; on iOS 16+ also turn on Settings › Privacy & Security › Developer Mode and restart. A free Apple ID signature lasts **7 days**: re-sign with Sideloadly before then (records are kept when you reinstall over the same app).
+- **Paid Apple Developer account (TestFlight).** Add repository secrets `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8_BASE64` (an App Store Connect API key with App Manager access, base64-encoded). The `testflight` job then signs and uploads each build; create the app record for bundle ID `in.tawang.fieldnotes` in App Store Connect first. This job has not been run yet.
+
+On the iPhone the app uses Core Location for GPS, the share sheet for exports and backups (Save to Files or Google Drive) and the same native networking as Android for Gemini, Pl@ntNet and Google Maps short links. Photos picked from the library keep their date when iOS passes the original metadata; if it doesn't, the form asks for the date.
+
 ## Run / deploy
 
 It is a static site — no build step. Camera and GPS need HTTPS (or `localhost`).
@@ -69,8 +80,9 @@ On the phone, open the site in Chrome and choose *Add to Home screen*, then tap 
 | `assets/geo/` | India state and district boundaries (DataMeet) |
 | `sw.js` | Offline cache (browser only) |
 | `android/` | Capacitor Android project |
+| `ios/` | Capacitor iOS project |
 | `.github/workflows/android.yml` | Builds the APK and runs the emulator test |
-| `scripts/` | Web copy for the Android build; emulator test |
+| `scripts/` | Web copy for the app builds; Android emulator test; iOS simulator self-test (`scripts/ios-test/`) |
 | `vendor/` | Leaflet 1.9.4, Leaflet.heat 0.2.0, Fraunces font (OFL) |
 
 Data sources: GBIF Backbone Taxonomy, iNaturalist, Wikipedia, Google Gemini API, Pl@ntNet, AWS Terrain Tiles, Open-Meteo (Copernicus DEM), OpenStreetMap/Nominatim, Esri, OpenTopoMap, Esri World Imagery, DataMeet boundaries (CC BY 4.0; districts as of Census 2011). Home screen photographs by Geken.
